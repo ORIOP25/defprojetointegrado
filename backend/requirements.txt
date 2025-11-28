@@ -1,0 +1,26 @@
+# Framework Web e Servidor
+fastapi==0.110.0
+uvicorn[standard]==0.27.1
+python-multipart==0.0.9
+
+# Base de Dados (ORM e Driver)
+SQLAlchemy==2.0.28
+mysql-connector-python==8.3.0
+
+# Configuração e Validação
+pydantic[dotenv]==2.6.4
+pydantic-settings==2.2.1
+email-validator==2.1.1
+
+# Segurança (JWT e Hashing)
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+
+# Utilitários (Exportação Excel e Dados de Teste)
+pandas==2.2.1
+openpyxl==3.1.2
+faker==24.3.0
+
+# Como instalar tudo de uma vez (se precisar reinstalar)
+# pip install -r requirements.txt
