@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.endpoints import auth, finances, dashboard, students, staff
+from app.api.endpoints import auth, finances, dashboard, students, staff, ai_advisor
 from app.db.database import engine, Base
 
 Base.metadata.create_all(bind=engine)
@@ -33,6 +33,7 @@ app.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
 app.include_router(staff.router, prefix="/staff", tags=["Gestão de Staff"])
 app.include_router(staff.router, prefix="/staff", tags=["Staff"])
 app.include_router(students.router, prefix="/students", tags=["Gestão de Alunos"])
+app.include_router(ai_advisor.router, prefix="/ai", tags=["Assistente IA"])
 
 @app.get("/")
 def read_root():

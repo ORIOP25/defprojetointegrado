@@ -55,8 +55,33 @@ class AlunoListagem(BaseModel):
     Telefone: Optional[str] = None
 
 # --- Schemas de Finanças (Dashboard) ---
+
+# 1. Schema para o detalhe de cada linha (Lab, Projeto, etc.)
+class BalancoInvestimento(BaseModel):
+    id: int
+    tipo_investimento: str
+    ano_financiamento: int
+    valor_aprovado: float
+    total_receita_periodo: float
+    total_despesa_periodo: float
+    total_gasto_acumulado: float
+    saldo_restante: float
+
+# 2. Schema Geral (O Pai) que inclui a lista dos filhos
 class BalancoGeral(BaseModel):
     periodo: str 
     total_receita: float
     total_despesa: float
     saldo: float
+    # Adicionamos este campo para o frontend receber a lista detalhada
+    detalhe_investimentos: List[BalancoInvestimento] = []
+
+
+# --- Schemas de IA / Recomendações ---
+class RecomendacaoIA(BaseModel):
+    id: int
+    titulo: str
+    descricao: str
+    area: str       # Ex: "Financeira", "Pedagógica", "Staff"
+    prioridade: str # Ex: "Alta", "Média", "Baixa"
+    acao_sugerida: Optional[str] = None
