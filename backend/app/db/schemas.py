@@ -45,6 +45,15 @@ class AlunoDisplay(AlunoBase):
     class Config:
         from_attributes = True
 
+class AlunoListagem(BaseModel):
+    Aluno_id: int
+    Nome: str
+    Data_Nasc: Optional[date] = None
+    Genero: Optional[str] = None
+    Turma_Desc: str  # Campo calculado (ex: "10º A" ou "Sem Turma")
+    EE_Nome: str     # Campo calculado (ex: "Nome do Pai" ou "N/A")
+    Telefone: Optional[str] = None
+
 # --- Schemas de Finanças (Dashboard) ---
 class BalancoGeral(BaseModel):
     periodo: str 
