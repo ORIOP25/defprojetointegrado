@@ -1,10 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.endpoints import auth, finances
+from app.api.endpoints import auth, finances, dashboard, students, staff
 from app.db.database import engine, Base
 
-# --- Configuração Inicial da Base de Dados ---
-# Apenas cria as tabelas se elas não existirem
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -13,11 +11,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# --- Configuração de CORS (Segurança do Browser) ---
 origins = [
-    "http://localhost:5173",    # Porta padrão do Vite
+    "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "http://localhost:8080",    # <--- ADICIONADO: A tua porta atual
+    "http://localhost:8080",
     "http://127.0.0.1:8080",
 ]
 
@@ -29,13 +26,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Rotas (Endpoints) ---
-
-# CORREÇÃO AQUI: Adicionado prefix="/auth"
-# Agora a rota final fica: /auth/token (como o frontend espera)
+#Rotas
 app.include_router(auth.router, prefix="/auth", tags=["Autenticação"])
-
 app.include_router(finances.router, prefix="/financas", tags=["Relatórios Financeiros"])
+app.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
+app.include_router(staff.router, prefix="/staff", tags=["Gestão de Staff"])
+app.include_router(staff.router, prefix="/staff", tags=["Staff"])
+app.include_router(students.router, prefix="/students", tags=["Gestão de Alunos"])
 
 @app.get("/")
 def read_root():
