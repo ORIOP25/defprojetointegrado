@@ -6,14 +6,14 @@ import { toast } from 'sonner';
 // Define o formato do nosso Utilizador (baseado no Token)
 interface User {
   email: string;
-  role: 'global_admin' | 'staff' | 'professor';
+  role: 'global_admin' | 'admin' | 'staff' | 'professor';
   // Podes adicionar mais campos aqui se o token os trouxer (ex: nome, id)
 }
 
 // O que o token JWT traz lá dentro
 interface JwtPayload {
   sub: string;  // email
-  role: 'global_admin' | 'staff' | 'professor';
+  role: 'global_admin' | 'admin' | 'staff' | 'professor';
   exp: number;
 }
 

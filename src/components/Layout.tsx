@@ -35,7 +35,7 @@ const Layout = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Determina se o utilizador é admin global
-  const isGlobalAdmin = user?.role === 'global_admin';
+  const isGlobalAdmin = user?.role === 'admin' || user?.role === 'global_admin';
 
   const handleLogout = () => {
     logout();

@@ -1,213 +1,228 @@
+import random
 from datetime import date
 from sqlalchemy.orm import Session
 from app.db.database import SessionLocal, engine, Base
 from app.db.models import (
-    User, Departamento, Escalao, Professor, Staff, Turma,
-    EncarregadoEducacao, Aluno, Disciplina, TurmaDisciplina,
-    Nota, Financiamento, Fornecedor, Transacao, InventarioLab,
-    AIRecommendation, GeneroEnum, TipoFuncionarioEnum, TipoTransacaoEnum
+    Departamento, Escalao, Professor, Staff, Turma,
+    EncarregadoEducacao, Aluno, Disciplina, Nota, Financiamento, 
+    Fornecedor, Transacao, GeneroEnum, TipoTransacaoEnum, AIRecommendation
 )
 from app.core.security import get_password_hash
 
+# --- LISTAS AUXILIARES PARA GERAR DADOS ---
+NOMES_PRIMEIROS = ["João", "Maria", "Ana", "Pedro", "Tiago", "Sofia", "Beatriz", "Tomás", "Diogo", "Mariana", "Rui", "Catarina", "Gonçalo", "Inês", "Lucas"]
+NOMES_ULTIMOS = ["Silva", "Santos", "Costa", "Pereira", "Oliveira", "Martins", "Rodrigues", "Ferreira", "Almeida", "Gomes", "Pinto", "Carvalho"]
+CARGOS_STAFF = ["Auxiliar de Ação Educativa", "Segurança", "Técnico Informático", "Bibliotecário", "Cozinheiro", "Secretário"]
 
-def populate_static():
+def gerar_nome():
+    return f"{random.choice(NOMES_PRIMEIROS)} {random.choice(NOMES_ULTIMOS)}"
+
+def populate_complete():
     db = SessionLocal()
 
     try:
-        print("🧹 A limpar e recriar tabelas...")
+        print("🧹 A limpar base de dados...")
         Base.metadata.drop_all(bind=engine)
         Base.metadata.create_all(bind=engine)
 
-        # ==========================================
-        # 1. UTILIZADORES & DEPARTAMENTOS
-        # ==========================================
-        print("👤 Criando Utilizadores e Estrutura...")
+        print("🏗️ A construir a infraestrutura da escola...")
 
-        # Admin
-        admin_user = User(email="admin@escola.pt", hashed_password=get_password_hash("admin123"), is_staff=True,
-                          is_active=True)
-        prof_user = User(email="professor@escola.pt", hashed_password=get_password_hash("prof123"), is_staff=False,
-                         is_active=True)
-        db.add_all([admin_user, prof_user])
+        # 1. DEPARTAMENTOS E ESCALÕES
+        deps = [
+            Departamento(Nome="Ciências e Tecnologias"),
+            Departamento(Nome="Línguas e Humanidades"),
+            Departamento(Nome="Artes Visuais"),
+            Departamento(Nome="Administração Escolar")
+        ]
+        db.add_all(deps)
         db.commit()
 
-        # Departamentos
-        dept_ciencias = Departamento(Nome="Ciências Experimentais")
-        dept_artes = Departamento(Nome="Artes Visuais")
-        dept_admin = Departamento(Nome="Serviços Administrativos")
-        db.add_all([dept_ciencias, dept_artes, dept_admin])
+        escaloes = [
+            Escalao(Nome="1º Esc", Valor_Base=1500.00),
+            Escalao(Nome="2º Esc", Valor_Base=1800.00),
+            Escalao(Nome="3º Esc", Valor_Base=2200.00)
+        ]
+        db.add_all(escaloes)
         db.commit()
 
-        # Escalões
-        esc_1 = Escalao(Nome="1º Esc", Descricao="Início Carreira", Valor_Base=1500.00)
-        esc_2 = Escalao(Nome="2º Esc", Descricao="Sénior", Valor_Base=2100.00)
-        db.add_all([esc_1, esc_2])
-        db.commit()
-
-        # ==========================================
-        # 2. STAFF E PROFESSORES
-        # ==========================================
-        print("👔 Criando Funcionários...")
-
-        # Professor (Diretor de Turma)
-        prof_antonio = Professor(
-            Nome="António Silva",
-            Data_Nasc=date(1980, 5, 20),
-            Telefone="911111111",
-            Morada="Rua da Escola, 1",
-            Escalao_id=esc_2.Escalao_id,
-            Depart_id=dept_ciencias.Depart_id
+        # 2. STAFF (15 PESSOAS)
+        print("👔 A contratar 15 funcionários...")
+        
+        # Admin Principal
+        admin = Staff(
+            Nome="Super Admin",
+            email="admin@escola.pt",
+            hashed_password=get_password_hash("pass123"), # CORRIGIDO PARA pass123
+            role="admin",
+            Cargo="Diretor",
+            Depart_id=deps[3].Depart_id,
+            Telefone="910000000"
         )
+        db.add(admin)
 
-        prof_maria = Professor(
-            Nome="Maria Santos",
-            Data_Nasc=date(1985, 3, 15),
-            Telefone="922222222",
-            Morada="Av. Liberdade, 20",
-            Escalao_id=esc_1.Escalao_id,
-            Depart_id=dept_artes.Depart_id
+        # Professores (8 Professores)
+        professores_objs = []
+        for i in range(8):
+            p = Professor(
+                Nome=gerar_nome(),
+                email=f"prof{i}@escola.pt",
+                hashed_password=get_password_hash("prof123"),
+                role="professor",
+                Data_Nasc=date(1980 + i, 1, 1),
+                Telefone=f"96000000{i}",
+                Escalao_id=random.choice(escaloes).Escalao_id,
+                Depart_id=random.choice(deps[:3]).Depart_id # Apenas dept pedagógicos
+            )
+            professores_objs.append(p)
+        db.add_all(professores_objs)
+        db.commit()
+
+        # Staff de Apoio (6 Staffs)
+        for i in range(6):
+            s = Staff(
+                Nome=gerar_nome(),
+                email=f"staff{i}@escola.pt",
+                hashed_password=get_password_hash("staff123"),
+                role="staff",
+                Cargo=random.choice(CARGOS_STAFF),
+                Depart_id=deps[3].Depart_id, # Dept Admin
+                Telefone=f"93000000{i}"
+            )
+            db.add(s)
+        db.commit()
+
+        # 3. TURMAS E DISCIPLINAS
+        print("📚 A criar Turmas e Disciplinas...")
+        
+        disciplinas = [
+            Disciplina(Nome="Matemática A", Categoria="Ciências"),
+            Disciplina(Nome="Física e Química", Categoria="Ciências"),
+            Disciplina(Nome="Português", Categoria="Línguas"),
+            Disciplina(Nome="Inglês", Categoria="Línguas"),
+            Disciplina(Nome="Geometria Descritiva", Categoria="Artes"),
+            Disciplina(Nome="História A", Categoria="Humanidades")
+        ]
+        db.add_all(disciplinas)
+        db.commit()
+
+        turmas = []
+        # Criar turmas do 10º, 11º e 12º
+        diretor_idx = 0
+        for ano in [10, 11, 12]:
+            for letra in ["A", "B"]:
+                # Atribuir um diretor de turma rotativo
+                diretor = professores_objs[diretor_idx % len(professores_objs)]
+                t = Turma(Ano=ano, Turma=letra, AnoLetivo="2024/2025", DiretorT=diretor.Professor_id)
+                turmas.append(t)
+                diretor_idx += 1
+        db.add_all(turmas)
+        db.commit()
+
+        # 4. ALUNOS (100 ALUNOS)
+        print("🎓 A matricular 100 alunos e lançar notas...")
+        
+        # Encarregado de educação genérico (para simplificar)
+        ee = EncarregadoEducacao(Nome="EE Genérico", Telefone="912345678")
+        db.add(ee)
+        db.commit()
+
+        for i in range(100):
+            turma_aluno = random.choice(turmas)
+            escalao_aluno = random.choice(["A", "B", "C", None]) # Alguns com ASE
+            
+            aluno = Aluno(
+                Nome=gerar_nome(),
+                Data_Nasc=date(2007, 1, 1),
+                Genero=random.choice([GeneroEnum.M, GeneroEnum.F]),
+                Ano=turma_aluno.Ano,
+                Turma_id=turma_aluno.Turma_id,
+                Escalao=escalao_aluno,
+                EE_id=ee.EE_id,
+                Telefone=f"920000{i:03d}"
+            )
+            db.add(aluno)
+            db.commit() # Commit para ter ID
+
+            # Lançar Notas (Simular Alunos Bons, Médios e Maus)
+            # 15% Maus, 60% Médios, 25% Bons
+            perfil = random.choices(["mau", "medio", "bom"], weights=[15, 60, 25])[0]
+            
+            notas_aluno = []
+            for disc in random.sample(disciplinas, 3): # 3 disciplinas por aluno
+                if perfil == "mau":
+                    nota_final = random.randint(5, 9) # Negativa
+                elif perfil == "medio":
+                    nota_final = random.randint(10, 14)
+                else:
+                    nota_final = random.randint(15, 20)
+                
+                n = Nota(
+                    Aluno_id=aluno.Aluno_id,
+                    Disc_id=disc.Disc_id,
+                    Nota_Final=nota_final,
+                    Ano_letivo="2024/2025"
+                )
+                notas_aluno.append(n)
+            
+            db.add_all(notas_aluno)
+
+        # 5. CASO ESPECIAL: O ALUNO EM RISCO (Para a AI detetar de certeza)
+        aluno_risco = Aluno(
+            Nome="Tiago Problemático", 
+            Data_Nasc=date(2008, 5, 20), Genero=GeneroEnum.M, Ano=12, Turma_id=turmas[0].Turma_id, EE_id=ee.EE_id
         )
-
-        staff_joana = Staff(
-            Nome="Joana Secretaria",
-            Cargo="Secretária Chefe",
-            Depart_id=dept_admin.Depart_id,
-            Telefone="933333333"
-        )
-
-        db.add_all([prof_antonio, prof_maria, staff_joana])
+        db.add(aluno_risco)
         db.commit()
+        # Notas muito negativas
+        db.add(Nota(Aluno_id=aluno_risco.Aluno_id, Disc_id=disciplinas[0].Disc_id, Nota_Final=4, Ano_letivo="2024/2025"))
+        db.add(Nota(Aluno_id=aluno_risco.Aluno_id, Disc_id=disciplinas[1].Disc_id, Nota_Final=6, Ano_letivo="2024/2025"))
 
-        # ==========================================
-        # 3. TURMAS E ALUNOS
-        # ==========================================
-        print("🎓 Criando Turmas e Alunos...")
-
-        # Turma
-        turma_12a = Turma(Ano=12, Turma="A", AnoLetivo="2023/2024", DiretorT=prof_antonio.Professor_id)
-        db.add(turma_12a)
-        db.commit()
-
-        # Disciplinas
-        matematica = Disciplina(Nome="Matemática A", Categoria="Ciências")
-        fisica = Disciplina(Nome="Física", Categoria="Ciências")
-        desenho = Disciplina(Nome="Desenho A", Categoria="Artes")
-        db.add_all([matematica, fisica, desenho])
-        db.commit()
-
-        # Aluno 1
-        ee_carlos = EncarregadoEducacao(Nome="Carlos Costa", Telefone="966666666", Relacao="Pai")
-        db.add(ee_carlos)
-        db.commit()
-
-        aluno_bruno = Aluno(
-            Nome="Bruno Costa",
-            Data_Nasc=date(2006, 1, 10),
-            Telefone="910000001",
-            Genero=GeneroEnum.M,
-            Ano=12,
-            Turma_id=turma_12a.Turma_id,
-            Escalao="A",
-            EE_id=ee_carlos.EE_id
-        )
-        db.add(aluno_bruno)
-        db.commit()
-
-        # Notas do Bruno
-        nota_mat = Nota(
-            Aluno_id=aluno_bruno.Aluno_id,
-            Disc_id=matematica.Disc_id,
-            Nota_1P=14, Nota_2P=15, Nota_3P=16, Nota_Final=15,
-            Ano_letivo="2023/2024"
-        )
-        db.add(nota_mat)
-
-        # ==========================================
-        # 4. FINANÇAS (CONTABILIDADE DE FUNDOS)
-        # ==========================================
-        print("💰 Criando Dados Financeiros (Lógica de Fundos)...")
-
+        # 6. FINANÇAS (CENÁRIO MISTO)
+        print("💰 A criar movimentos financeiros...")
+        
         # Fornecedores
-        forn_fnac = Fornecedor(Nome="FNAC", NIF="123456789", Tipo="Tecnologia")
-        forn_ikea = Fornecedor(Nome="IKEA", NIF="987654321", Tipo="Mobiliário")
-        db.add_all([forn_fnac, forn_ikea])
+        f1 = Fornecedor(Nome="Papelaria Central", NIF="111111111")
+        f2 = Fornecedor(Nome="Eletro Escola", NIF="222222222")
+        db.add_all([f1, f2])
         db.commit()
 
-        # --- INVESTIMENTO 1: Laboratório de Química ---
-        fin_lab = Financiamento(
-            Tipo="Projeto Lab Química 2024",
-            Valor=50000.00,  # Orçamento Total
-            Ano=2024,
-            Observacoes="Financiamento FCT para renovação"
-        )
+        # Financiamento 1: Saudável
+        fin_papel = Financiamento(Tipo="Material Escritório", Valor=5000.00, Ano=2025)
+        db.add(fin_papel)
+        db.commit()
+        
+        db.add(Transacao(Tipo=TipoTransacaoEnum.Receita, Valor=5000.00, Data=date(2025, 1, 10), Fin_id=fin_papel.Fin_id))
+        db.add(Transacao(Tipo=TipoTransacaoEnum.Despesa, Valor=200.00, Data=date(2025, 2, 10), Descricao="Resmas Papel", Fin_id=fin_papel.Fin_id, Fornecedor_id=f1.Fornecedor_id))
+
+        # Financiamento 2: CRÍTICO (Para a AI detetar)
+        fin_lab = Financiamento(Tipo="Projeto Robótica", Valor=10000.00, Ano=2025)
         db.add(fin_lab)
         db.commit()
-
-        # Receita (O dinheiro entra na conta)
-        t1 = Transacao(
-            Tipo=TipoTransacaoEnum.Receita,
-            Valor=50000.00,
-            Data=date(2024, 1, 5),
-            Descricao="Transferência Inicial FCT",
-            Fin_id=fin_lab.Fin_id
-        )
-        # Despesa 1 (Compra de material)
-        t2 = Transacao(
-            Tipo=TipoTransacaoEnum.Despesa,
-            Valor=1250.50,
-            Data=date(2024, 2, 10),
-            Descricao="Microscópios",
+        
+        db.add(Transacao(Tipo=TipoTransacaoEnum.Receita, Valor=10000.00, Data=date(2025, 1, 15), Fin_id=fin_lab.Fin_id))
+        # Despesa massiva
+        db.add(Transacao(
+            Tipo=TipoTransacaoEnum.Despesa, 
+            Valor=9500.00, 
+            Data=date(2025, 3, 20), 
+            Descricao="Compra Equipamento Não Autorizado", 
             Fin_id=fin_lab.Fin_id,
-            Fornecedor_id=forn_fnac.Fornecedor_id
-        )
-        db.add_all([t1, t2])
+            Fornecedor_id=f2.Fornecedor_id
+        ))
 
-        # --- INVESTIMENTO 2: Biblioteca ---
-        fin_bib = Financiamento(
-            Tipo="Renovação Biblioteca",
-            Valor=10000.00,
-            Ano=2024
-        )
-        db.add(fin_bib)
-        db.commit()
-
-        t3 = Transacao(
-            Tipo=TipoTransacaoEnum.Receita,
-            Valor=10000.00,
-            Data=date(2024, 3, 1),
-            Descricao="Verba CM",
-            Fin_id=fin_bib.Fin_id
-        )
-        t4 = Transacao(
-            Tipo=TipoTransacaoEnum.Despesa,
-            Valor=500.00,
-            Data=date(2024, 3, 15),
-            Descricao="Novas Estantes",
-            Fin_id=fin_bib.Fin_id,
-            Fornecedor_id=forn_ikea.Fornecedor_id
-        )
-        db.add_all([t3, t4])
-
-        # ==========================================
-        # 5. INVENTÁRIO E IA
-        # ==========================================
-        item1 = InventarioLab(
-            Lab_id=1, Nome_Lab="Química", Armario="A1", Nome_Item="Tubo de Ensaio", Quantidade=50, Estado="Novo"
-        )
-        db.add(item1)
-
-        ai_rec = AIRecommendation(Texto="O aluno Bruno Costa melhorou 2 valores a Matemática.")
-        db.add(ai_rec)
+        # 7. AI RECOMMENDATIONS (Dados Iniciais)
+        print("🤖 A inicializar módulo AI...")
+        rec = AIRecommendation(Texto="O sistema de IA foi inicializado e aguarda a primeira análise completa.")
+        db.add(rec)
 
         db.commit()
-        print("✅ Base de Dados populada com dados ESTÁTICOS com sucesso!")
+        print("✅ POPULAÇÃO CONCLUÍDA: 100 Alunos, 15 Staff, Cenários Criados.")
 
     except Exception as e:
-        print(f"❌ Erro: {e}")
+        print(f"❌ Erro crítico: {e}")
         db.rollback()
     finally:
         db.close()
 
-
 if __name__ == "__main__":
-    populate_static()
+    populate_complete()

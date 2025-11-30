@@ -25,7 +25,11 @@ def calcular_investimento_individual(db: Session, investimento: Financiamento, a
     gasto_acumulado = query_acumulado.scalar() or 0.0
 
     # O saldo real é o valor inicial do financiamento MENOS tudo o que já se gastou dele até hoje
-    saldo_restante = float(investimento.Valor) - gasto_acumulado
+    # CORREÇÃO: Converter ambos para float explicitamente para evitar erro Decimal vs Float
+    valor_inicial = float(investimento.Valor or 0.0)
+    gasto_total = float(gasto_acumulado or 0.0)
+
+    saldo_restante = valor_inicial - gasto_total
 
     # 2. Calcular movimentos do PERÍODO solicitado (Mês/Ano) para o relatório
     query_periodo = db.query(

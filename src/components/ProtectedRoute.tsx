@@ -25,9 +25,15 @@ export const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRout
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
-  // Se a rota exigir Admin e o user não for Admin
-  if (requireAdmin && user.role !== 'global_admin') {
-    return <Navigate to="/dashboard" replace />;
+  // CORREÇÃO AQUI:
+  // Se exigir Admin, aceita tanto 'global_admin' como 'admin'
+  if (requireAdmin) {
+    const isAdmin = user.role === 'global_admin' || user.role === 'admin';
+    
+    if (!isAdmin) {
+      // Se não for nenhum dos tipos de admin, manda para dashboard
+      return <Navigate to="/dashboard" replace />;
+    }
   }
 
   return <>{children}</>;

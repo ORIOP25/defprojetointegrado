@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
+import { AuthContext } from "@/context/AuthContext"; // <--- Importante
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +13,6 @@ import {
   Loader2
 } from "lucide-react";
 
-// Definição do Tipo (Igual ao Schema Python)
 interface Recomendacao {
   id: number;
   titulo: string;
@@ -23,31 +23,43 @@ interface Recomendacao {
 }
 
 const Recommendations = () => {
+  // Vamos buscar o TOKEN ao contexto de autenticação
+  const { token } = useContext(AuthContext); 
+  
   const [insights, setInsights] = useState<Recomendacao[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Função para buscar dados ao backend
   const fetchInsights = async () => {
     try {
       setLoading(true);
-      // Nota: Endpoint configurado em ai_advisor.py
-      const response = await fetch("http://127.0.0.1:8000/ai/insights");
+      
+      // Enviamos o Token no cabeçalho (Authorization)
+      const response = await fetch("http://127.0.0.1:8000/ai/insights", {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      });
+
       if (!response.ok) throw new Error("Erro ao carregar insights");
       const data = await response.json();
       setInsights(data);
     } catch (error) {
       console.error(error);
     } finally {
-      // Simular um pequeno delay para parecer que a AI está a "pensar"
+      // Pequeno delay para UX
       setTimeout(() => setLoading(false), 800);
     }
   };
 
+  // O useEffect só corre quando existe um token
   useEffect(() => {
-    fetchInsights();
-  }, []);
+    if (token) {
+        fetchInsights();
+    }
+  }, [token]);
 
-  // Função auxiliar para cor da prioridade
+  // Funções de Estilo
   const getPriorityColor = (p: string) => {
     switch(p) {
       case "Alta": return "bg-red-100 text-red-800 hover:bg-red-200 border-red-200";
@@ -57,7 +69,6 @@ const Recommendations = () => {
     }
   };
 
-  // Função auxiliar para ícone da área
   const getIcon = (area: string) => {
     switch(area) {
       case "Financeira": return <TrendingUp className="h-5 w-5 text-green-600" />;
@@ -88,7 +99,6 @@ const Recommendations = () => {
 
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-           {/* Skeleton Loading State */}
            {[1,2,3].map(i => (
              <Card key={i} className="h-48 flex items-center justify-center bg-muted/50 border-dashed">
                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -119,7 +129,6 @@ const Recommendations = () => {
                 <p className="text-sm text-gray-600 mb-4 leading-relaxed">
                   {item.descricao}
                 </p>
-                
                 {item.acao_sugerida && (
                   <div className="bg-muted/50 p-3 rounded-md border text-sm flex gap-3 items-start">
                     <ArrowRight className="h-4 w-4 mt-0.5 text-primary shrink-0" />
