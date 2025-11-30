@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List
+from typing import List, Dict, Any, Optional
 from datetime import date
 
 # --- Schemas de Autenticação (Token) ---
@@ -85,3 +85,22 @@ class RecomendacaoIA(BaseModel):
     area: str       # Ex: "Financeira", "Pedagógica", "Staff"
     prioridade: str # Ex: "Alta", "Média", "Baixa"
     acao_sugerida: Optional[str] = None
+
+class InsightDetalhe(BaseModel):
+    # Aceita qualquer chave/valor para a tabela ser dinâmica
+    # Ex: {"Aluno": "João", "Nota": 10}
+    class Config:
+        extra = "allow" 
+
+class InsightItem(BaseModel):
+    tipo: str # "positivo", "negativo", "neutro"
+    titulo: str
+    descricao: str
+    sugestao: str
+    # Uma lista de dicionários para a tabela
+    detalhes: List[Dict[str, Any]] = []
+
+class CategoriaInsight(BaseModel):
+    categoria: str
+    cor: str # "blue", "green", "red"
+    insights: List[InsightItem]
