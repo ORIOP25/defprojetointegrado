@@ -27,12 +27,14 @@ import {
   SheetContent,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { MessageSquare } from "lucide-react";
 
 const Layout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useContext(AuthContext);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
 
   // Determina se o utilizador é admin global
   const isGlobalAdmin = user?.role === 'admin' || user?.role === 'global_admin';
@@ -72,6 +74,12 @@ const Layout = () => {
       href: "/recommendations",
       icon: Lightbulb,
       show: isGlobalAdmin, // Apenas Admin
+    },
+    {
+      title: "Chat IA",
+      href: "/chat",
+      icon: MessageSquare,
+      show: isGlobalAdmin, // Ou 'true' se quiseres que todos vejam
     },
   ];
 

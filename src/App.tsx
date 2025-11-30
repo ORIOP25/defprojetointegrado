@@ -10,8 +10,10 @@ import Students from "./pages/Students";
 import Staff from "./pages/Staff";
 import Finances from "./pages/Finances";
 import Recommendations from "./pages/Recommendations";
+import Chat from "./pages/Chat";
 import NotFound from "./pages/NotFound";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+
 
 const queryClient = new QueryClient();
 
@@ -29,6 +31,7 @@ const App = () => (
             <Route path="/staff" element={<ProtectedRoute><Staff /></ProtectedRoute>} />
             <Route path="/finances" element={<ProtectedRoute requireAdmin><Finances /></ProtectedRoute>} />
             <Route path="/recommendations" element={<ProtectedRoute requireAdmin><Recommendations /></ProtectedRoute>} />
+            <Route path="/chat" element={<ProtectedRoute requireAdmin><Chat /></ProtectedRoute>} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

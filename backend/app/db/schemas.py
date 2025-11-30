@@ -104,3 +104,10 @@ class CategoriaInsight(BaseModel):
     categoria: str
     cor: str # "blue", "green", "red"
     insights: List[InsightItem]
+
+# --- Schemas para o Chatbot ---
+class ChatRequest(BaseModel):
+    message: str
+
+class ChatResponse(BaseModel):
+    response: str
