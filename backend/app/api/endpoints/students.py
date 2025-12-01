@@ -8,18 +8,27 @@ from app.db import schemas
 router = APIRouter()
 
 @router.get("/", response_model=List[schemas.AlunoListagem])
-def read_students(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_students(skip: int = 0, limit: int = 100, search: str = None, db: Session = Depends(get_db)):
     """
-    Obtém lista de alunos com paginação.
+    Obtém lista de alunos com paginação e pesquisa opcional.
     Faz JOIN com Turma e EncarregadoEducacao para mostrar nomes reais.
     """
-    alunos_query = db.query(models.Aluno)\
+    
+    # 1. Iniciar a Query com os Joins necessários (Eager Loading)
+    query = db.query(models.Aluno)\
         .options(joinedload(models.Aluno.turma_obj))\
-        .options(joinedload(models.Aluno.encarregado_educacao))\
-        .offset(skip)\
-        .limit(limit)\
-        .all()
+        .options(joinedload(models.Aluno.encarregado_educacao))
 
+    # 2. Aplicar o Filtro de Pesquisa (Se o parâmetro 'search' for enviado)
+    if search:
+        search_fmt = f"%{search}%"
+        # Filtra alunos cujo nome contenha o texto pesquisado (case-insensitive)
+        query = query.filter(models.Aluno.Nome.ilike(search_fmt))
+
+    # 3. Aplicar Paginação e Executar (.all())
+    alunos_query = query.offset(skip).limit(limit).all()
+
+    # 4. Formatar os resultados (Mantendo a tua lógica original)
     results = []
     for aluno in alunos_query:
         turma_str = "Sem Turma"

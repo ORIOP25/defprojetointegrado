@@ -15,7 +15,6 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
-// Interface baseada no Schema AlunoListagem do backend
 interface AlunoListagem {
   Aluno_id: number;
   Nome: string;
@@ -26,7 +25,6 @@ interface AlunoListagem {
   Telefone: string;
 }
 
-// Interface para o formulário de criação
 interface AlunoForm {
   Nome: string;
   Data_Nasc: string;
@@ -40,11 +38,10 @@ interface AlunoForm {
 }
 
 const Students = () => {
-  // Estado para a lista de alunos vinda da API
   const [alunos, setAlunos] = useState<AlunoListagem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState(""); // Estado da pesquisa
 
-  // Estado do formulário (Design da Sara)
   const [formData, setFormData] = useState<AlunoForm>({
     Nome: "",
     Data_Nasc: "",
@@ -59,10 +56,17 @@ const Students = () => {
 
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  // 1. Função para carregar dados da API
   const fetchStudents = async () => {
+    // Opção: Podes comentar o setLoading(true) se não quiseres que a tabela pisque
+    // mas a estrutura abaixo já resolve o problema do foco.
+    setLoading(true); 
     try {
-      const response = await fetch("http://127.0.0.1:8000/students/");
+      const baseUrl = "http://127.0.0.1:8000/students/";
+      const url = searchTerm 
+        ? `${baseUrl}?search=${encodeURIComponent(searchTerm)}` 
+        : baseUrl;
+
+      const response = await fetch(url);
       if (!response.ok) throw new Error("Erro ao buscar alunos");
       const data = await response.json();
       setAlunos(data);
@@ -73,15 +77,16 @@ const Students = () => {
     }
   };
 
-  // Carregar dados ao iniciar
   useEffect(() => {
-    fetchStudents();
-  }, []);
+    const delayDebounceFn = setTimeout(() => {
+      fetchStudents();
+    }, 500);
 
-  // 2. Função de guardar (Placeholder para POST futuro)
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchTerm]);
+
   const handleSubmit = () => {
     console.log("A enviar para API:", formData);
-    // Aqui adicionarias o fetch POST para /students/
     setDialogOpen(false);
   };
 
@@ -95,7 +100,6 @@ const Students = () => {
           </p>
         </div>
 
-        {/* Botão Adicionar Aluno (Design da Sara) */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button className="flex gap-2">
@@ -108,65 +112,17 @@ const Students = () => {
             <DialogHeader>
               <DialogTitle>Adicionar Novo Aluno</DialogTitle>
             </DialogHeader>
-
+            {/* Formulário (Resumido para poupar espaço, mantém o teu igual) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              <div className="col-span-2 md:col-span-1">
-                <Label>Nome Completo</Label>
-                <Input
-                  value={formData.Nome}
-                  onChange={(e) => setFormData({ ...formData, Nome: e.target.value })}
-                  placeholder="Ex: João Silva"
-                />
-              </div>
-
-              <div>
-                <Label>Data de Nascimento</Label>
-                <Input
-                  type="date"
-                  value={formData.Data_Nasc}
-                  onChange={(e) => setFormData({ ...formData, Data_Nasc: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <Label>Género</Label>
-                <select
-                  className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  value={formData.Genero}
-                  onChange={(e) => setFormData({ ...formData, Genero: e.target.value as "M" | "F" })}
-                >
-                  <option value="M">Masculino</option>
-                  <option value="F">Feminino</option>
-                </select>
-              </div>
-
-              <div>
-                <Label>Telefone</Label>
-                <Input
-                  value={formData.Telefone}
-                  onChange={(e) => setFormData({ ...formData, Telefone: e.target.value })}
-                />
-              </div>
-
-              <div className="col-span-2">
-                <Label>Morada</Label>
-                <Input
-                  value={formData.Morada}
-                  onChange={(e) => setFormData({ ...formData, Morada: e.target.value })}
-                />
-              </div>
-              
-              {/* Campos adicionais para estrutura */}
-              <div>
-                <Label>Ano Letivo</Label>
-                <Input
-                  type="number"
-                  value={formData.Ano}
-                  onChange={(e) => setFormData({ ...formData, Ano: Number(e.target.value) })}
-                />
-              </div>
+               {/* ... Os teus inputs do formulário aqui ... */}
+               <div className="col-span-2">
+                 <Label>Nome (Exemplo)</Label>
+                 <Input 
+                    value={formData.Nome} 
+                    onChange={(e) => setFormData({...formData, Nome: e.target.value})} 
+                 />
+               </div>
             </div>
-
             <div className="flex justify-end gap-2 mt-6">
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
               <Button onClick={handleSubmit}>Guardar Ficha</Button>
@@ -175,33 +131,37 @@ const Students = () => {
         </Dialog>
       </div>
 
-      {/* 3. Área de Conteúdo: Tabela ou Loading */}
-      {loading ? (
-        <Card className="border-dashed border-2 bg-muted/50">
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-            <p className="text-muted-foreground">A carregar alunos...</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex justify-between items-center">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <GraduationCap className="h-5 w-5 text-primary" />
-                Listagem Geral
-              </CardTitle>
-              <div className="relative w-64">
-                 {/* Placeholder de pesquisa visual */}
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Procurar aluno..." className="pl-8 h-9" />
-              </div>
+      <Card>
+        {/* CORREÇÃO: O Header com o Input está AGORA FORA do bloco condicional do loading */}
+        <CardHeader className="pb-2">
+          <div className="flex justify-between items-center">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <GraduationCap className="h-5 w-5 text-primary" />
+              Listagem Geral
+            </CardTitle>
+            <div className="relative w-64">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Procurar aluno..." 
+                className="pl-8 h-9" 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
-          </CardHeader>
-          <CardContent>
-            {alunos.length === 0 ? (
+          </div>
+        </CardHeader>
+        
+        <CardContent>
+          {/* Só o conteúdo da tabela é que muda para loading */}
+          {loading ? (
+             <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+                <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+                <p>A atualizar lista...</p>
+             </div>
+          ) : (
+            alunos.length === 0 ? (
                <div className="text-center py-10 text-muted-foreground">
-                 Nenhum aluno encontrado na base de dados.
+                 {searchTerm ? `Nenhum aluno encontrado para "${searchTerm}".` : "Nenhum aluno na base de dados."}
                </div>
             ) : (
               <Table>
@@ -244,10 +204,10 @@ const Students = () => {
                   ))}
                 </TableBody>
               </Table>
-            )}
-          </CardContent>
-        </Card>
-      )}
+            )
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };
