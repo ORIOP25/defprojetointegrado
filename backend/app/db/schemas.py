@@ -54,6 +54,15 @@ class AlunoListagem(BaseModel):
     EE_Nome: str     # Campo calculado (ex: "Nome do Pai" ou "N/A")
     Telefone: Optional[str] = None
 
+
+class AlunoUpdate(BaseModel):
+    Nome: Optional[str] = None
+    Data_Nasc: Optional[date] = None
+    Telefone: Optional[str] = None
+    Genero: Optional[str] = None
+    EE_Nome: Optional[str] = None
+    # Nota: Atualizar EE ou Turma requer lógica extra, focamos nos dados pessoais por agora
+
 # --- Schemas de Finanças (Dashboard) ---
 
 # 1. Schema para o detalhe de cada linha (Lab, Projeto, etc.)
@@ -111,3 +120,38 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
+
+class NotaBase(BaseModel):
+    Disc_id: int
+    Nota_1P: Optional[int] = None
+    Nota_2P: Optional[int] = None
+    Nota_3P: Optional[int] = None
+    Nota_Ex: Optional[int] = None
+    Nota_Final: Optional[int] = None
+    Ano_letivo: str
+
+class NotaCreate(NotaBase):
+    pass
+
+class NotaDisplay(NotaBase):
+    Nota_id: int
+    # Para mostrar o nome da disciplina em vez de só o ID
+    Disciplina_Nome: Optional[str] = "Disciplina Desconhecida"
+
+    class Config:
+        from_attributes = True
+
+# Schema para Atualizar Nota (Campos opcionais)
+class NotaUpdate(BaseModel):
+    Nota_1P: Optional[int] = None
+    Nota_2P: Optional[int] = None
+    Nota_3P: Optional[int] = None
+    Nota_Ex: Optional[int] = None
+    Nota_Final: Optional[int] = None
+
+# Schema simples para o Dropdown de Disciplinas
+class DisciplinaSimple(BaseModel):
+    Disc_id: int
+    Nome: str
+    class Config:
+        from_attributes = True
