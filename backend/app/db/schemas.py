@@ -1,20 +1,18 @@
 from pydantic import BaseModel, EmailStr
-from typing import List, Dict, Any, Optional
+from typing import Optional, List, Dict, Any
 from datetime import date
 
 # --- Schemas de Autenticação (Token) ---
 class Token(BaseModel):
     access_token: str
     token_type: str
-    # Nota: Removemos 'user_email' e 'is_staff' porque essa info 
-    # agora viaja encriptada DENTRO do access_token (JWT).
 
 class TokenData(BaseModel):
     email: Optional[str] = None
+    # O role é flexível (str) para aceitar 'admin', 'global_admin', 'staff', etc.
     role: Optional[str] = None
 
-# --- Schemas de Leitura de Staff/Professor (Para substituir o antigo User) ---
-# Usaremos isto na Fase 3 para mostrar os dados no perfil
+# --- Schemas de Leitura de Staff/Professor ---
 class StaffDisplay(BaseModel):
     id: int
     email: EmailStr
@@ -25,7 +23,7 @@ class StaffDisplay(BaseModel):
     class Config:
         from_attributes = True
 
-# --- Schemas de Aluno (Para a Fase 3) ---
+# --- Schemas de Aluno ---
 class AlunoBase(BaseModel):
     Nome: str
     Data_Nasc: Optional[date] = None
@@ -40,8 +38,6 @@ class AlunoCreate(AlunoBase):
 
 class AlunoDisplay(AlunoBase):
     Aluno_id: int
-    # Podes adicionar mais campos aqui conforme necessário
-
     class Config:
         from_attributes = True
 
@@ -50,13 +46,11 @@ class AlunoListagem(BaseModel):
     Nome: str
     Data_Nasc: Optional[date] = None
     Genero: Optional[str] = None
-    Turma_Desc: str  # Campo calculado (ex: "10º A" ou "Sem Turma")
-    EE_Nome: str     # Campo calculado (ex: "Nome do Pai" ou "N/A")
+    Turma_Desc: str  # Calculado manualmente no endpoint (students.py)
+    EE_Nome: str     
     Telefone: Optional[str] = None
 
 # --- Schemas de Finanças (Dashboard) ---
-
-# 1. Schema para o detalhe de cada linha (Lab, Projeto, etc.)
 class BalancoInvestimento(BaseModel):
     id: int
     tipo_investimento: str
@@ -67,37 +61,22 @@ class BalancoInvestimento(BaseModel):
     total_gasto_acumulado: float
     saldo_restante: float
 
-# 2. Schema Geral (O Pai) que inclui a lista dos filhos
 class BalancoGeral(BaseModel):
     periodo: str 
     total_receita: float
     total_despesa: float
     saldo: float
-    # Adicionamos este campo para o frontend receber a lista detalhada
     detalhe_investimentos: List[BalancoInvestimento] = []
 
-
-# --- Schemas de IA / Recomendações ---
-class RecomendacaoIA(BaseModel):
-    id: int
-    titulo: str
-    descricao: str
-    area: str       # Ex: "Financeira", "Pedagógica", "Staff"
-    prioridade: str # Ex: "Alta", "Média", "Baixa"
-    acao_sugerida: Optional[str] = None
-
-class InsightDetalhe(BaseModel):
-    # Aceita qualquer chave/valor para a tabela ser dinâmica
-    # Ex: {"Aluno": "João", "Nota": 10}
-    class Config:
-        extra = "allow" 
+# --- Schemas de IA (Estrutura Hierárquica) ---
+# Esta estrutura espelha o JSON gerado pelo ai_service.py e consumido pelo Recommendations.tsx
 
 class InsightItem(BaseModel):
-    tipo: str # "positivo", "negativo", "neutro"
+    tipo: str # "positivo", "negativo", "neutro" - Define a cor do cartão no frontend
     titulo: str
     descricao: str
     sugestao: str
-    # Uma lista de dicionários para a tabela
+    # Usamos Dict[str, Any] para permitir tabelas dinâmicas (Notas vs Euros)
     detalhes: List[Dict[str, Any]] = []
 
 class CategoriaInsight(BaseModel):

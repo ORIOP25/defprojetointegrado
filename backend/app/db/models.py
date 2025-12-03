@@ -17,6 +17,11 @@ class TipoTransacaoEnum(str, enum.Enum):
     Receita = "Receita"
     Despesa = "Despesa"
 
+class TipoOcorrenciaEnum(str, enum.Enum):
+    Leve = "Leve" # Falta de material, conversa
+    Grave = "Grave" # Desrespeito, perturbação
+    MuitoGrave = "Muito Grave" # Agressão, Vandalismo
+
 # --- Tabelas de Estrutura ---
 
 class Departamento(Base):
@@ -80,6 +85,8 @@ class Professor(Base):
     departamento = relationship("Departamento", back_populates="professores")
     turmas_diretor = relationship("Turma", back_populates="diretor_turma")
 
+    atribuicoes = relationship("TurmaDisciplina", back_populates="professor")
+
 # --- Alunos e Turmas ---
 
 class Turma(Base):
@@ -92,6 +99,9 @@ class Turma(Base):
     
     diretor_turma = relationship("Professor", back_populates="turmas_diretor")
     alunos = relationship("Aluno", back_populates="turma_obj")
+
+    disciplinas_associadas = relationship("TurmaDisciplina", back_populates="turma")
+
     __table_args__ = (UniqueConstraint('Ano', 'Turma', 'AnoLetivo', name='_ano_turma_uc'),)
 
 class EncarregadoEducacao(Base):
@@ -122,11 +132,41 @@ class Aluno(Base):
     encarregado_educacao = relationship("EncarregadoEducacao", back_populates="educandos")
     notas = relationship("Nota", back_populates="aluno")
 
+    faltas = relationship("Falta", back_populates="aluno")
+    ocorrencias = relationship("Ocorrencia", back_populates="aluno")
+
+class Falta(Base):
+    __tablename__ = "Faltas"
+    Falta_id = Column(Integer, primary_key=True, index=True)
+    Aluno_id = Column(Integer, ForeignKey("Alunos.Aluno_id"))
+    Disc_id = Column(Integer, ForeignKey("Disciplinas.Disc_id")) # Saber a que aula faltou
+    Data = Column(Date, nullable=False)
+    Justificada = Column(Boolean, default=False)
+    
+    aluno = relationship("Aluno", back_populates="faltas")
+    disciplina = relationship("Disciplina")
+
+class Ocorrencia(Base):
+    __tablename__ = "Ocorrencias"
+    Ocorrencia_id = Column(Integer, primary_key=True, index=True)
+    Aluno_id = Column(Integer, ForeignKey("Alunos.Aluno_id"))
+    Professor_id = Column(Integer, ForeignKey("Professores.Professor_id")) # Quem reportou
+    Data = Column(Date, nullable=False)
+    Tipo = Column(Enum(TipoOcorrenciaEnum), default=TipoOcorrenciaEnum.Leve)
+    Descricao = Column(Text) # "Atirou giz ao colega" - Ouro para a IA ler
+    
+    aluno = relationship("Aluno", back_populates="ocorrencias")
+    professor = relationship("Professor")
+
 class TurmaDisciplina(Base):
     __tablename__ = "TurmasDisciplinas"
     Turma_id = Column(Integer, ForeignKey("Turmas.Turma_id"), primary_key=True)
     Disc_id = Column(Integer, ForeignKey("Disciplinas.Disc_id"), primary_key=True)
     Professor_id = Column(Integer, ForeignKey("Professores.Professor_id"), primary_key=True)
+
+    turma = relationship("Turma", back_populates="disciplinas_associadas")
+    disciplina = relationship("Disciplina") # Unidirecional chega
+    professor = relationship("Professor", back_populates="atribuicoes")
 
 class Nota(Base):
     __tablename__ = "Notas"
