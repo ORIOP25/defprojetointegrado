@@ -23,6 +23,21 @@ class StaffDisplay(BaseModel):
     class Config:
         from_attributes = True
 
+class StaffCreate(BaseModel):
+    Nome: str
+    email: str
+    Cargo: str
+    role: str
+    Telefone: str = ""
+    Morada: str = ""
+
+class StaffSchema(StaffCreate):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
 # --- Schemas de Aluno ---
 class AlunoBase(BaseModel):
     Nome: str

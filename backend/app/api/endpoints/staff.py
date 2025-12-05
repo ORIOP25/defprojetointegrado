@@ -1,8 +1,9 @@
 from typing import List
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.db.database import get_db
+from app.db.database import get_db, Base
 from app.db import models, schemas
+from app.db.models import Staff     # importa o model Staff
 
 router = APIRouter()
 
@@ -11,17 +12,28 @@ def read_staff(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """
     Obtém lista de staff.
     """
-    staff_query = db.query(models.Staff).offset(skip).limit(limit).all()
-    
-    # Mapeamento manual para garantir que os nomes dos campos batem certo
-    results = []
-    for s in staff_query:
-        results.append({
-            "id": s.Staff_id,    # O model tem Staff_id, o schema quer id
-            "email": s.email,
-            "Nome": s.Nome,
-            "Cargo": s.Cargo,
-            "role": s.role
-        })
+    try:
+        staff_query = db.query(Staff).offset(skip).limit(limit).all()
+        results = []
+        for s in staff_query:
+            print(f"Lendo staff: {s.Staff_id} | {s.Nome} | {s.email}")  # debug
+            results.append({
+                "id": s.Staff_id,
+                "email": s.email,
+                "Nome": s.Nome,
+                "Cargo": s.Cargo,
+                "role": s.role
+            })
+        return results
+    except Exception as e:
+        print("Erro ao ler staff:", e)
+        raise HTTPException(status_code=500, detail="Erro ao ler staff")
 
-    return results
+@router.delete("/staff/{staff_id}", status_code=204)
+def delete_staff(staff_id: int, db: Session = Depends(get_db)):
+    staff_member = db.query(models.Staff).filter(models.Staff.Staff_id == staff_id).first()
+    if not staff_member:
+        raise HTTPException(status_code=404, detail="Staff não encontrado")
+    db.delete(staff_member)
+    db.commit()
+    return
