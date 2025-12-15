@@ -10,274 +10,330 @@ from app.db.models import (
 )
 from app.core.security import get_password_hash
 
-# --- DADOS SEED ---
-NOMES_MASCULINOS = ["João", "Pedro", "Tiago", "Lucas", "Mateus", "Duarte", "Tomás", "Gonçalo", "Rodrigo", "Francisco", "Martim", "Santiago", "Afonso"]
-NOMES_FEMININOS = ["Maria", "Ana", "Sofia", "Beatriz", "Leonor", "Matilde", "Carolina", "Mariana", "Inês", "Lara", "Alice", "Francisca", "Clara"]
-APELIDOS = ["Silva", "Santos", "Ferreira", "Pereira", "Oliveira", "Costa", "Rodrigues", "Martins", "Gomes", "Lopes", "Marques", "Almeida", "Ribeiro"]
-DEPARTAMENTOS = ["Ciências Exatas", "Línguas", "Artes", "Ciências Sociais", "Serviços Admin"]
-CARGOS_STAFF = ["Secretário", "Assistente Operacional", "Técnico Informática", "Psicólogo", "Segurança"]
+# --- DADOS GERAIS ---
+
+NOMES_MASCULINOS = ["João", "Pedro", "Tiago", "Lucas", "Mateus", "Duarte", "Tomás", "Gonçalo", "Rodrigo", "Francisco", "Martim", "Santiago", "Afonso", "Miguel", "Guilherme"]
+NOMES_FEMININOS = ["Maria", "Ana", "Sofia", "Beatriz", "Leonor", "Matilde", "Carolina", "Mariana", "Inês", "Lara", "Alice", "Francisca", "Clara", "Diana", "Madalena"]
+APELIDOS = ["Silva", "Santos", "Ferreira", "Pereira", "Oliveira", "Costa", "Rodrigues", "Martins", "Gomes", "Lopes", "Marques", "Almeida", "Ribeiro", "Pinto", "Carvalho"]
+
+RUAS = ["Rua da Liberdade", "Av. da República", "Tv. das Flores", "Pç. do Comércio", "Rua do Sol", "Av. dos Aliados", "Rua das Acácias", "Caminho do Rio"]
+LOCAIS = ["Lisboa", "Porto", "Coimbra", "Braga", "Aveiro", "Faro", "Viseu", "Leiria"]
+
+# Lista de Departamentos
+DEPARTAMENTOS_LISTA = ["Ciências Exatas", "Línguas", "Artes", "Ciências Sociais", "Desporto", "Serviços Admin"]
+
+# Configuração dos Escalões (Nome Curto <= 10 chars, Valor Base)
+# CORREÇÃO: Nomes encurtados para caber no String(10)
+ESCALOES_CONFIG = [
+    ("Esc 1", 1714.11),
+    ("Esc 2", 1910.67),
+    ("Esc 3", 2073.43),
+    ("Esc 4", 2197.89),
+    ("Esc 5", 2360.65),
+    ("Esc 6", 2456.38),
+    ("Esc 7", 2715.45),
+    ("Esc 8", 2982.61),
+    ("Esc 9", 3391.60),
+    ("Esc 10", 3690.84),
+]
 
 DISCIPLINAS_CONFIG = [
-    {"nome": "Matemática A", "cat": "Ciências", "dept_idx": 0},
-    {"nome": "Física e Química A", "cat": "Ciências", "dept_idx": 0},
-    {"nome": "Português", "cat": "Línguas", "dept_idx": 1},
-    {"nome": "Inglês", "cat": "Línguas", "dept_idx": 1},
-    {"nome": "História A", "cat": "Humanidades", "dept_idx": 3},
-    {"nome": "Oficina de Artes", "cat": "Artes", "dept_idx": 2},
-    {"nome": "Educação Física", "cat": "Desporto", "dept_idx": 4} # Dept 4 é placeholder
+    {"nome": "Matemática A", "cat": "Ciências"},
+    {"nome": "Fís-Química A", "cat": "Ciências"}, # Encurtado por segurança
+    {"nome": "Português", "cat": "Línguas"},
+    {"nome": "Inglês", "cat": "Línguas"},
+    {"nome": "História A", "cat": "Humanidades"},
+    {"nome": "Oficina Artes", "cat": "Artes"},
+    {"nome": "Ed. Física", "cat": "Desporto"},
+    {"nome": "Filosofia", "cat": "Humanidades"},
+    {"nome": "Geografia A", "cat": "Humanidades"},
 ]
 
-COMENTARIOS_MAU_COMPORTAMENTO = [
-    "Perturbou a aula constantemente.", "Recusou-se a trabalhar.", "Uso indevido do telemóvel.", 
-    "Chegou atrasado e fez barulho.", "Faltou ao respeito ao professor."
-]
-COMENTARIOS_GRAVES = [
-    "Agressão verbal a um colega.", "Danos materiais na sala de aula.", "Suspeita de vandalismo."
-]
+CARGOS_STAFF = ["Secretário", "Assistente Op.", "Téc. Informática", "Psicólogo", "Segurança", "Bibliotecário", "Cozinheiro"]
+
+# --- FUNÇÕES AUXILIARES ---
 
 def gerar_nome(genero=None):
-    if genero == "M": primeiro = random.choice(NOMES_MASCULINOS)
-    elif genero == "F": primeiro = random.choice(NOMES_FEMININOS)
-    else: primeiro = random.choice(NOMES_MASCULINOS + NOMES_FEMININOS)
+    if genero == "M":
+        primeiro = random.choice(NOMES_MASCULINOS)
+    elif genero == "F":
+        primeiro = random.choice(NOMES_FEMININOS)
+    else:
+        primeiro = random.choice(NOMES_MASCULINOS + NOMES_FEMININOS)
+    
     return f"{primeiro} {random.choice(APELIDOS)} {random.choice(APELIDOS)}"
+
+def gerar_morada():
+    return f"{random.choice(RUAS)}, {random.randint(1, 200)}, {random.choice(LOCAIS)}"
+
+def gerar_telefone():
+    return f"9{random.choice([1, 2, 3, 6])}{random.randint(1000000, 9999999)}"
+
+def limpar_string(texto):
+    # Remove acentos e converte para minúsculas para emails
+    return texto.lower().replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u").replace("ç", "c").replace("ã", "a").replace(" ", ".")
 
 def populate_advanced():
     db = SessionLocal()
     try:
-        print("🧹 Limpar DB...")
+        print("🧹 A Limpar a Base de Dados antiga...")
         Base.metadata.drop_all(bind=engine)
         Base.metadata.create_all(bind=engine)
 
+        # ---------------------------------------------------------
         # 1. DEPARTAMENTOS & ESCALÕES
-        print("🏗️ Estrutura Base...")
-        dept_objs = [Departamento(Nome=d) for d in DEPARTAMENTOS]
-        db.add_all(dept_objs)
-        db.commit()
+        # ---------------------------------------------------------
+        print("🏗️  A criar Estrutura (Departamentos e Escalões)...")
+        
+        dept_objs = []
+        for d_nome in DEPARTAMENTOS_LISTA:
+            dept = Departamento(Nome=d_nome)
+            db.add(dept)
+            dept_objs.append(dept)
+        db.commit() 
+        
+        # Garantir IDs frescos
+        dept_objs = db.query(Departamento).all()
+        # Identificar o departamento admin (o último ou pelo nome)
+        dept_admin = next((d for d in dept_objs if "Admin" in d.Nome), dept_objs[-1])
 
-        # Escalões com grande disparidade para a IA analisar Custo vs Benefício
         esc_objs = []
-        vals = [1200, 1600, 2100, 2800] # Salários progressivos
-        for i, val in enumerate(vals, 1):
-            esc = Escalao(Nome=f"{i}º Esc", Valor_Base=val, Descricao=f"Nível {i}")
+        for nome, valor in ESCALOES_CONFIG:
+            esc = Escalao(Nome=nome, Valor_Base=valor, Descricao="Carreira Docente")
             db.add(esc)
             esc_objs.append(esc)
         db.commit()
+        esc_objs = db.query(Escalao).all()
 
+        # ---------------------------------------------------------
         # 2. STAFF & PROFESSORES
-        print("👔 Recursos Humanos...")
-        admin = Staff(Nome="Admin", email="admin@escola.pt", hashed_password=get_password_hash("pass"), role="admin", Depart_id=dept_objs[4].Depart_id)
+        # ---------------------------------------------------------
+        print("👔 A criar Recursos Humanos...")
+
+        # 2.1 ADMIN GLOBAL
+        admin = Staff(
+            Nome="Admin Principal",
+            email="admin@escola.pt",
+            hashed_password=get_password_hash("pass"),
+            role="admin", # Importante ser "admin"
+            Cargo="Diretor",
+            Depart_id=dept_admin.Depart_id,
+            Telefone=gerar_telefone(),
+            Morada=gerar_morada(),
+            Salario=3500.00,
+            Escalao="Direção"
+        )
         db.add(admin)
 
-        professores = []
-        # Criar "Personagens" Docentes para a IA detetar
-        # Prof 0: O "Caro e Mau" (Escalão alto, mas alunos com más notas)
-        # Prof 1: O "Barato e Bom" (Estagiário, alunos com ótimas notas)
-        for i in range(20): # Aumentei um pouco o nº de professores para cobrir mais turmas
-            escalao_idx = 3 if i == 0 else (0 if i == 1 else random.randint(0, 3))
-            dept_idx = i % 4
+        # 2.2 STAFF (Não Docente)
+        for i in range(15):
+            nome = gerar_nome()
+            primeiro = nome.split()[0]
+            ultimo = nome.split()[-1]
+            email = f"{limpar_string(primeiro)}.{limpar_string(ultimo)}@escola.pt"
             
-            p = Professor(
-                Nome=gerar_nome(),
-                email=f"prof{i+1}@escola.pt", 
-                hashed_password=get_password_hash("123"),
-                Data_Nasc=date(1970 + i, 1, 1),
-                Escalao_id=esc_objs[escalao_idx].Escalao_id,
-                Depart_id=dept_objs[dept_idx].Depart_id
-            )
-            professores.append(p)
-        db.add_all(professores)
-        db.commit()
-
-        # Staff Não Docente (Secretaria, Técnicos, etc.)
-        for i in range(8):
             s = Staff(
-                Nome=gerar_nome(),
-                email=f"staff{i+1}@escola.pt",
-                hashed_password=get_password_hash("staff123"),
+                Nome=nome,
+                email=email,
+                hashed_password=get_password_hash("123"),
                 role="staff",
                 Cargo=random.choice(CARGOS_STAFF),
-                Depart_id=dept_objs[4].Depart_id, # Dept 4 = Serviços Administrativos
-                Telefone=f"9300000{i:02d}"
+                Depart_id=dept_admin.Depart_id,
+                Telefone=gerar_telefone(),
+                Morada=gerar_morada(),
+                Salario=random.randint(850, 1400) + random.choice([0.00, 0.50, 0.25]),
+                Escalao="Geral"
             )
             db.add(s)
+        
+        # 2.3 PROFESSORES
+        professores = []
+        # Depts docentes são todos menos o Admin
+        depts_docentes = [d for d in dept_objs if "Admin" not in d.Nome]
+
+        for i in range(30):
+            nome = gerar_nome()
+            primeiro = nome.split()[0]
+            ultimo = nome.split()[-1]
+            email = f"{limpar_string(primeiro)}.{limpar_string(ultimo)}@escola.pt"
+            
+            dept_random = random.choice(depts_docentes)
+            # Distribuição de escalões (mais no meio da carreira)
+            esc_random = random.choices(esc_objs, weights=[5, 10, 20, 20, 15, 10, 10, 5, 3, 2])[0]
+
+            p = Professor(
+                Nome=nome,
+                email=email,
+                hashed_password=get_password_hash("123"),
+                role="teacher", # Usar 'teacher' para consistência com frontend
+                Data_Nasc=date(random.randint(1965, 1995), random.randint(1, 12), random.randint(1, 28)),
+                Telefone=gerar_telefone(),
+                Morada=gerar_morada(),
+                Depart_id=dept_random.Depart_id,
+                Escalao_id=esc_random.Escalao_id
+            )
+            professores.append(p)
+            db.add(p)
+        
         db.commit()
 
-        # 3. TURMAS E DISCIPLINAS
-        print("📚 Académico...")
+        # ---------------------------------------------------------
+        # 3. ACADÉMICO (Turmas e Disciplinas)
+        # ---------------------------------------------------------
+        print("📚 A criar Turmas e Disciplinas...")
+        
         disciplinas = [Disciplina(Nome=d["nome"], Categoria=d["cat"]) for d in DISCIPLINAS_CONFIG]
         db.add_all(disciplinas)
         db.commit()
 
         turmas = []
-        # GERAÇÃO EXPANDIDA: 5º ao 12º ano - Turmas A a E
-        for ano in range(5, 13): # range(5, 13) gera números de 5 a 12
-            for letra in ["A", "B", "C", "D", "E"]:
-                # Escolhe um diretor de turma aleatório
-                dt_id = professores[random.randint(0, len(professores)-1)].Professor_id
-                t = Turma(Ano=ano, Turma=letra, AnoLetivo="2024/2025", DiretorT=dt_id)
+        # Cria turmas do 5º ao 12º ano (A, B, C)
+        for ano in range(5, 13):
+            for letra in ["A", "B", "C"]:
+                dt = random.choice(professores)
+                t = Turma(Ano=ano, Turma=letra, AnoLetivo="2024/2025", DiretorT=dt.Professor_id)
                 turmas.append(t)
-        
         db.add_all(turmas)
         db.commit()
 
-        # Atribuição de Disciplinas
+        # Atribuir Disciplinas às Turmas
         for turma in turmas:
-            disciplinas_escolhidas = disciplinas[:5] # Simplificação: todos têm as primeiras 5
-            for disc in disciplinas_escolhidas:
-                # Se for Matemática (idx 0), forçar o Prof 0 (Caro/Mau) na Turma 10A para criar o cenário
-                if disc.Nome == "Matemática A" and turma.Ano == 10 and turma.Turma == "A":
-                    prof = professores[0] 
-                elif disc.Nome == "Matemática A" and turma.Ano == 10 and turma.Turma == "B":
-                    prof = professores[1] # O Prof Bom e Barato
-                else:
-                    prof = random.choice(professores)
-                
+            discs_turma = random.sample(disciplinas, k=6)
+            # Garantir Portugues e Ed Fisica
+            pt = next((d for d in disciplinas if "Português" in d.Nome), None)
+            ef = next((d for d in disciplinas if "Física" in d.Nome and "Ed" in d.Nome), None)
+            
+            if pt and pt not in discs_turma: discs_turma.append(pt)
+            if ef and ef not in discs_turma: discs_turma.append(ef)
+
+            for disc in discs_turma:
+                prof = random.choice(professores)
                 td = TurmaDisciplina(Turma_id=turma.Turma_id, Disc_id=disc.Disc_id, Professor_id=prof.Professor_id)
                 db.add(td)
         db.commit()
 
-        # 4. ALUNOS, NOTAS E COMPORTAMENTO (CORRELACIONADOS)
-        print("🎓 Alunos e Histórico Comportamental...")
-        ee = EncarregadoEducacao(Nome="EE Geral", Telefone="999999999")
-        db.add(ee)
-        db.commit()
+        # ---------------------------------------------------------
+        # 4. ALUNOS COMPLETOS
+        # ---------------------------------------------------------
+        print("🎓 A matricular Alunos (com EE, Notas e Faltas)...")
 
-        perfis = ["excelencia", "risco_queda", "rebelde", "normal"]
-        pesos = [10, 20, 10, 60] # 10% Rebeldes, 20% Risco
-        
-        # Gere mais alunos já que há mais turmas (40 turmas agora)
-        # Vamos aumentar para 400 alunos (aprox 10 por turma para teste)
-        for i in range(400): 
-            turma = turmas[i % len(turmas)]
-            perfil = random.choices(perfis, weights=pesos)[0]
-            genero = random.choice(["M", "F"])
+        for turma in turmas:
+            # 22 alunos por turma
+            num_alunos = 22
             
-            aluno = Aluno(
-                Nome=gerar_nome(genero), Data_Nasc=date(2008, 1, 1), Genero=genero,
-                Ano=turma.Ano, Turma_id=turma.Turma_id, EE_id=ee.EE_id
-            )
-            db.add(aluno)
+            for _ in range(num_alunos):
+                genero_str = random.choice(["M", "F"])
+                # Mapear para Enum se necessário (depende do DB driver, mas string costuma passar)
+                genero_enum = GeneroEnum.M if genero_str == "M" else GeneroEnum.F
+                
+                nome_aluno = gerar_nome(genero_str)
+                primeiro_aluno = nome_aluno.split()[0]
+                
+                morada_familia = gerar_morada()
+                
+                # 1. EE
+                nome_ee = gerar_nome()
+                primeiro_ee = nome_ee.split()[0]
+                ee = EncarregadoEducacao(
+                    Nome=nome_ee,
+                    Telefone=gerar_telefone(),
+                    Email=f"{limpar_string(primeiro_ee)}.ee@gmail.com",
+                    Morada=morada_familia,
+                    Relacao=random.choice(["Pai", "Mãe"])
+                )
+                db.add(ee)
+                db.flush()
+
+                # 2. Aluno
+                ano_nasc = 2024 - turma.Ano - 6
+                aluno = Aluno(
+                    Nome=nome_aluno,
+                    Data_Nasc=date(ano_nasc, random.randint(1, 12), random.randint(1, 28)),
+                    Telefone=gerar_telefone(),
+                    Morada=morada_familia,
+                    Genero=genero_enum,
+                    Ano=turma.Ano,
+                    Turma_id=turma.Turma_id,
+                    Escalao=random.choice(["A", "B", "C", None, None]), # C é sem escalão no frontend as vezes
+                    EE_id=ee.EE_id
+                )
+                db.add(aluno)
+                db.flush()
+
+                # 3. Notas e Faltas
+                discs_desta_turma = db.query(TurmaDisciplina).filter_by(Turma_id=turma.Turma_id).all()
+                perfil = random.choices(["bom", "medio", "mau"], weights=[20, 60, 20])[0]
+
+                for td in discs_desta_turma:
+                    base = 16 if perfil == "bom" else (13 if perfil == "medio" else 9)
+                    n1 = max(0, min(20, base + random.randint(-3, 3)))
+                    n2 = max(0, min(20, n1 + random.randint(-2, 2)))
+                    n3 = max(0, min(20, n2 + random.randint(-2, 2)))
+                    nf = round((n1 + n2 + n3) / 3)
+
+                    nota = Nota(
+                        Aluno_id=aluno.Aluno_id,
+                        Disc_id=td.Disc_id,
+                        Nota_1P=n1,
+                        Nota_2P=n2,
+                        Nota_3P=n3,
+                        Nota_Final=nf,
+                        Ano_letivo="2024/2025"
+                    )
+                    db.add(nota)
+
+                    # Faltas
+                    if random.random() > 0.8:
+                        num_faltas = random.randint(1, 3)
+                        for _ in range(num_faltas):
+                            f = Falta(
+                                Aluno_id=aluno.Aluno_id,
+                                Disc_id=td.Disc_id,
+                                Data=date(2024, random.randint(9, 12), random.randint(1, 28)),
+                                Justificada=random.choice([True, False])
+                            )
+                            db.add(f)
+                
+                # 4. Ocorrência (raro)
+                if perfil == "mau" and random.random() > 0.8:
+                    oc = Ocorrencia(
+                        Aluno_id=aluno.Aluno_id,
+                        Professor_id=turma.DiretorT,
+                        Data=date(2024, 11, 15),
+                        Tipo=TipoOcorrenciaEnum.Grave,
+                        Descricao="Comportamento inadequado na sala de aula."
+                    )
+                    db.add(oc)
+
             db.commit()
 
-            # Gerar Dados baseados no Perfil
-            disciplinas_da_turma = db.query(TurmaDisciplina).filter_by(Turma_id=turma.Turma_id).all()
-
-            for td in disciplinas_da_turma:
-                # NOTAS
-                base = 14
-                if perfil == "excelencia": base = 18
-                elif perfil == "risco_queda": base = 9
-                elif perfil == "rebelde": base = 10
-                
-                # Variação: Se o professor for o "Caro e Mau" (Prof 0), as notas descem 2 pontos
-                if td.Professor_id == professores[0].Professor_id:
-                    base -= 3
-                
-                n1 = max(0, min(20, base + random.randint(-2, 2)))
-                n2 = max(0, min(20, n1 + random.randint(-2, 2)))
-                nf = round((n1+n2)/2)
-                
-                nota = Nota(Aluno_id=aluno.Aluno_id, Disc_id=td.Disc_id, Nota_1P=n1, Nota_2P=n2, Nota_Final=nf, Ano_letivo="2024/2025")
-                db.add(nota)
-
-                # FALTAS (Correlacionadas com disciplina e perfil)
-                # Alunos "Risco" faltam muito. Alunos "Rebeldes" faltam um pouco.
-                num_faltas = 0
-                if perfil == "risco_queda": num_faltas = random.randint(5, 15)
-                elif perfil == "rebelde": num_faltas = random.randint(2, 6)
-                
-                for _ in range(num_faltas):
-                    db.add(Falta(
-                        Aluno_id=aluno.Aluno_id, Disc_id=td.Disc_id, 
-                        Data=date(2024, random.randint(9, 12), random.randint(1, 28)),
-                        Justificada=random.choice([True, False])
-                    ))
-
-            # OCORRÊNCIAS (Apenas Perfil Rebelde ou Risco)
-            if perfil == "rebelde":
-                # Só cria ocorrência se houver disciplinas atribuídas à turma
-                if disciplinas_da_turma:
-                    for _ in range(random.randint(1, 4)):
-                        db.add(Ocorrencia(
-                            Aluno_id=aluno.Aluno_id, Professor_id=disciplinas_da_turma[0].Professor_id,
-                            Data=date(2024, random.randint(9, 12), random.randint(1, 28)),
-                            Tipo=TipoOcorrenciaEnum.Grave if random.random() > 0.7 else TipoOcorrenciaEnum.Leve,
-                            Descricao=random.choice(COMENTARIOS_MAU_COMPORTAMENTO)
-                        ))
-
         # ---------------------------------------------------------
-        # 5. FINANÇAS (Expandido e Variado)
+        # 5. FINANÇAS
         # ---------------------------------------------------------
-        print("💰 Finanças Simplificadas...")
-
-        # Fornecedores Essenciais
-        f_edp = Fornecedor(Nome="EDP Comercial", NIF="500000001", Tipo="Eletricidade")
-        f_aguas = Fornecedor(Nome="SMAS", NIF="500000002", Tipo="Água")
-        f_meo = Fornecedor(Nome="MEO", NIF="500000003", Tipo="Internet")
-        f_papel = Fornecedor(Nome="Papelaria Central", NIF="500000004", Tipo="Material")
-        f_manut = Fornecedor(Nome="Reparações Rápidas", NIF="500000005", Tipo="Manutenção")
-        db.add_all([f_edp, f_aguas, f_meo, f_papel, f_manut])
+        print("💰 A gerar Dados Financeiros...")
+        
+        f1 = Fornecedor(Nome="EDP Comercial", NIF="500100200", Tipo="Eletricidade")
+        f2 = Fornecedor(Nome="Papelaria Central", NIF="500300400", Tipo="Material Escolar")
+        f3 = Fornecedor(Nome="TechSolutions", NIF="500500600", Tipo="Equipamento Informático")
+        db.add_all([f1, f2, f3])
         db.commit()
 
-        # Conta Geral (Um único "saco" para tudo)
-        conta_geral = Financiamento(
-            Tipo="Gestão Corrente 2024/25", 
-            Valor=300000.00, 
-            Ano=2024, 
-            Observacoes="Orçamento anual para despesas correntes."
-        )
-        db.add(conta_geral)
+        fin = Financiamento(Tipo="Orçamento Estado 2024", Valor=500000.00, Ano=2024)
+        db.add(fin)
         db.commit()
 
-        # Gerar Movimentos Mensais (Set 2024 a Jun 2025)
-        # Datas simuladas
-        datas = [date(2024, 9, 1), date(2024, 10, 1), date(2024, 11, 1), date(2024, 12, 1),
-                 date(2025, 1, 1), date(2025, 2, 1), date(2025, 3, 1), date(2025, 4, 1)]
-
-        for d in datas:
-            # RECEITAS (Entra dinheiro)
-            db.add(Transacao(
-                Tipo=TipoTransacaoEnum.Receita, 
-                Valor=35000.00, 
-                Data=d.replace(day=5), 
-                Descricao="Transferência Ministério", 
-                Fin_id=conta_geral.Fin_id
-            ))
-            db.add(Transacao(
-                Tipo=TipoTransacaoEnum.Receita, 
-                Valor=random.uniform(1500, 2000), 
-                Data=d.replace(day=28), 
-                Descricao="Receitas Bar/Bufete", 
-                Fin_id=conta_geral.Fin_id
-            ))
-
-            # DESPESAS (Sai dinheiro)
-            # Eletricidade (varia no inverno)
-            valor_luz = 1200 if d.month in [11, 12, 1, 2] else 800
-            db.add(Transacao(Tipo=TipoTransacaoEnum.Despesa, Valor=valor_luz, Data=d.replace(day=10), Descricao="Eletricidade", Fin_id=conta_geral.Fin_id, Fornecedor_id=f_edp.Fornecedor_id))
-            
-            # Água
-            db.add(Transacao(Tipo=TipoTransacaoEnum.Despesa, Valor=350, Data=d.replace(day=12), Descricao="Água", Fin_id=conta_geral.Fin_id, Fornecedor_id=f_aguas.Fornecedor_id))
-            
-            # Net
-            db.add(Transacao(Tipo=TipoTransacaoEnum.Despesa, Valor=150, Data=d.replace(day=15), Descricao="Internet", Fin_id=conta_geral.Fin_id, Fornecedor_id=f_meo.Fornecedor_id))
-
-        # Despesa Extra (Para a IA ter o que comentar)
-        db.add(Transacao(
-            Tipo=TipoTransacaoEnum.Despesa, 
-            Valor=2500.00, 
-            Data=date(2025, 3, 15), 
-            Descricao="Reparação Urgente Telhado (Inverno)", 
-            Fin_id=conta_geral.Fin_id, 
-            Fornecedor_id=f_manut.Fornecedor_id
-        ))
-
-        db.add(AIRecommendation(Texto="Dados Gerados."))
+        t1 = Transacao(Tipo=TipoTransacaoEnum.Receita, Valor=500000.00, Data=date(2024, 1, 10), Descricao="Transferência Ministério", Fin_id=fin.Fin_id)
+        t2 = Transacao(Tipo=TipoTransacaoEnum.Despesa, Valor=1250.40, Data=date(2024, 2, 15), Descricao="Fatura Eletricidade Jan", Fin_id=fin.Fin_id, Fornecedor_id=f1.Fornecedor_id)
+        t3 = Transacao(Tipo=TipoTransacaoEnum.Despesa, Valor=450.00, Data=date(2024, 2, 20), Descricao="Resmas de Papel A4", Fin_id=fin.Fin_id, Fornecedor_id=f2.Fornecedor_id)
+        db.add_all([t1, t2, t3])
+        
+        db.add(AIRecommendation(Texto="Sistema inicializado com sucesso."))
+        
         db.commit()
-        print("✅ População Completa! Cenários de IA criados.")
+        print("✅ Base de Dados Populada com Sucesso!")
 
     except Exception as e:
-        print(f"❌ Erro: {e}")
+        print(f"❌ Erro fatal ao popular: {e}")
         db.rollback()
     finally:
         db.close()

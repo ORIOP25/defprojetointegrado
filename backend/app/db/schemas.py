@@ -140,12 +140,12 @@ class DisciplinaSimple(BaseModel):
 
 class StaffBase(BaseModel):
     Nome: str
-    Email: EmailStr
+    email: EmailStr
     Telefone: Optional[str] = None
     Morada: Optional[str] = None
     Cargo: str
     Departamento: Optional[str] = None
-    Role: Optional[str] = "staff"
+    role: Optional[str] = "staff"
     Salario: Optional[float] = 0.0
     Escalao: Optional[str] = None
 
@@ -154,12 +154,12 @@ class StaffCreate(StaffBase):
 
 class StaffUpdate(BaseModel):
     Nome: Optional[str] = None
-    Email: Optional[EmailStr] = None
+    email: Optional[EmailStr] = None
     Telefone: Optional[str] = None
     Morada: Optional[str] = None
     Cargo: Optional[str] = None
     Departamento: Optional[str] = None
-    Role: Optional[str] = None
+    role: Optional[str] = None
     Salario: Optional[float] = None
     Escalao: Optional[str] = None
 
@@ -167,7 +167,24 @@ class StaffListagem(StaffBase):
     Staff_id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+
+# --- Schemas de Leitura de Staff/Professor (ATUALIZADO) ---
+class StaffDisplay(BaseModel):
+    id: int
+    email: EmailStr
+    Nome: str
+    Cargo: Optional[str] = None
+    role: str
+    # Novos campos para o Perfil
+    Telefone: Optional[str] = None
+    Morada: Optional[str] = None
+    Salario: Optional[float] = 0.0
+    Escalao: Optional[str] = None
+    Departamento: Optional[str] = None  # Novo
+
+    class Config:
+        from_attributes = True
 
 # --- Schemas de Finanças (Dashboard) ---
 
