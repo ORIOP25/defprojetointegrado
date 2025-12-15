@@ -72,7 +72,7 @@ def populate_advanced():
         # Criar "Personagens" Docentes para a IA detetar
         # Prof 0: O "Caro e Mau" (Escalão alto, mas alunos com más notas)
         # Prof 1: O "Barato e Bom" (Estagiário, alunos com ótimas notas)
-        for i in range(15):
+        for i in range(20): # Aumentei um pouco o nº de professores para cobrir mais turmas
             escalao_idx = 3 if i == 0 else (0 if i == 1 else random.randint(0, 3))
             dept_idx = i % 4
             
@@ -109,14 +109,18 @@ def populate_advanced():
         db.commit()
 
         turmas = []
-        for ano, letra in [(10,"A"), (10,"B"), (11,"A"), (11,"B"), (12,"A")]:
-            t = Turma(Ano=ano, Turma=letra, AnoLetivo="2024/2025", DiretorT=professores[random.randint(0,14)].Professor_id)
-            turmas.append(t)
+        # GERAÇÃO EXPANDIDA: 5º ao 12º ano - Turmas A a E
+        for ano in range(5, 13): # range(5, 13) gera números de 5 a 12
+            for letra in ["A", "B", "C", "D", "E"]:
+                # Escolhe um diretor de turma aleatório
+                dt_id = professores[random.randint(0, len(professores)-1)].Professor_id
+                t = Turma(Ano=ano, Turma=letra, AnoLetivo="2024/2025", DiretorT=dt_id)
+                turmas.append(t)
+        
         db.add_all(turmas)
         db.commit()
 
-        # Atribuição de Disciplinas (Garantir que o Prof "Caro e Mau" tem turmas)
-        mapa_turma_disciplina = {} # Para saber quem dá aulas a quem
+        # Atribuição de Disciplinas
         for turma in turmas:
             disciplinas_escolhidas = disciplinas[:5] # Simplificação: todos têm as primeiras 5
             for disc in disciplinas_escolhidas:
@@ -130,7 +134,6 @@ def populate_advanced():
                 
                 td = TurmaDisciplina(Turma_id=turma.Turma_id, Disc_id=disc.Disc_id, Professor_id=prof.Professor_id)
                 db.add(td)
-                mapa_turma_disciplina[(turma.Turma_id, disc.Disc_id)] = prof.Professor_id
         db.commit()
 
         # 4. ALUNOS, NOTAS E COMPORTAMENTO (CORRELACIONADOS)
@@ -142,7 +145,9 @@ def populate_advanced():
         perfis = ["excelencia", "risco_queda", "rebelde", "normal"]
         pesos = [10, 20, 10, 60] # 10% Rebeldes, 20% Risco
         
-        for i in range(120):
+        # Gere mais alunos já que há mais turmas (40 turmas agora)
+        # Vamos aumentar para 400 alunos (aprox 10 por turma para teste)
+        for i in range(400): 
             turma = turmas[i % len(turmas)]
             perfil = random.choices(perfis, weights=pesos)[0]
             genero = random.choice(["M", "F"])
@@ -190,13 +195,15 @@ def populate_advanced():
 
             # OCORRÊNCIAS (Apenas Perfil Rebelde ou Risco)
             if perfil == "rebelde":
-                for _ in range(random.randint(1, 4)):
-                    db.add(Ocorrencia(
-                        Aluno_id=aluno.Aluno_id, Professor_id=disciplinas_da_turma[0].Professor_id,
-                        Data=date(2024, random.randint(9, 12), random.randint(1, 28)),
-                        Tipo=TipoOcorrenciaEnum.Grave if random.random() > 0.7 else TipoOcorrenciaEnum.Leve,
-                        Descricao=random.choice(COMENTARIOS_MAU_COMPORTAMENTO)
-                    ))
+                # Só cria ocorrência se houver disciplinas atribuídas à turma
+                if disciplinas_da_turma:
+                    for _ in range(random.randint(1, 4)):
+                        db.add(Ocorrencia(
+                            Aluno_id=aluno.Aluno_id, Professor_id=disciplinas_da_turma[0].Professor_id,
+                            Data=date(2024, random.randint(9, 12), random.randint(1, 28)),
+                            Tipo=TipoOcorrenciaEnum.Grave if random.random() > 0.7 else TipoOcorrenciaEnum.Leve,
+                            Descricao=random.choice(COMENTARIOS_MAU_COMPORTAMENTO)
+                        ))
 
         # ---------------------------------------------------------
         # 5. FINANÇAS (Expandido e Variado)

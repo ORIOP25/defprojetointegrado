@@ -62,6 +62,8 @@ class Staff(Base):
     Depart_id = Column(Integer, ForeignKey("Departamentos.Depart_id"))
     Telefone = Column(String(9))
     Morada = Column(String(100))
+    Salario = Column(DECIMAL(8, 2), nullable=True)
+    Escalao = Column(String(50), nullable=True)
 
     departamento = relationship("Departamento", back_populates="staff")
 

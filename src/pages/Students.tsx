@@ -1,9 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react"; // <-- Adicionado useRef
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
   GraduationCap, Loader2, Plus, Search, User, 
-  Pencil, Trash2, Save, X, BookOpen 
+  Pencil, Trash2, Save, X, BookOpen, Mail, MapPin, Phone, School, 
+  ChevronLeft, ChevronRight, Filter, ArrowUpDown, 
+  Download, Upload, FileSpreadsheet // <-- Novos ícones adicionados
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -26,19 +28,34 @@ interface AlunoListagem {
   Data_Nasc: string;
   Genero: string;
   Turma_Desc: string;
-  EE_Nome: string;
+  Turma_Ano: number;
+  Turma_Letra: string;
   Telefone: string;
+  // Dados EE Completos
+  EE_Nome: string;
+  EE_Telefone?: string;
+  EE_Email?: string;
+  EE_Morada?: string;
+  EE_Relacao?: string;
 }
 
 interface AlunoForm {
     Nome: string;
     Data_Nasc: string;
     Telefone: string;
-    Morada: string;
     Genero: "M" | "F";
-    Ano: number;
-    Turma_Letra: string;
+    // Novo: Controlamos a turma pelo ID no formulário
+    Turma_id: string; 
+    // Mantemos estes para envio se necessário, mas calculados a partir do ID
+    Ano?: number;
+    Turma_Letra?: string;
+    
+    // Dados EE Completos
     EE_Nome: string;
+    EE_Telefone: string;
+    EE_Email: string;
+    EE_Morada: string;
+    EE_Relacao: string;
 }
 
 interface Nota {
@@ -58,19 +75,32 @@ interface Disciplina {
     Nome: string;
 }
 
+interface Turma {
+    Turma_id: number;
+    Ano: number;
+    Turma: string;
+}
+
 const Students = () => {
   // --- ESTADOS GERAIS ---
   const [alunos, setAlunos] = useState<AlunoListagem[]>([]);
   const [disciplinas, setDisciplinas] = useState<Disciplina[]>([]);
+  const [turmas, setTurmas] = useState<Turma[]>([]); // Lista de turmas para o dropdown
   const [loading, setLoading] = useState(true);
+  
+  // PAGINAÇÃO E FILTROS
   const [searchTerm, setSearchTerm] = useState("");
+  const [page, setPage] = useState(1);
+  const [filtroTurma, setFiltroTurma] = useState<string>("Todas");
+  const [sortBy, setSortBy] = useState<"id" | "name">("id"); // Estado de Ordenação
+  const limit = 100; // Alunos por página
 
   // --- ESTADOS DO PERFIL E EDIÇÃO DE ALUNO ---
   const [selectedStudent, setSelectedStudent] = useState<AlunoListagem | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   
   const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [editProfileData, setEditProfileData] = useState<AlunoListagem | null>(null);
+  const [editProfileData, setEditProfileData] = useState<(AlunoListagem & { Turma_id?: string }) | null>(null);
   const [deleteAlertOpen, setDeleteAlertOpen] = useState(false);
 
   // --- ESTADOS DAS NOTAS ---
@@ -89,21 +119,36 @@ const Students = () => {
   });
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  
+  // Estado do formulário de criação
   const [formData, setFormData] = useState<AlunoForm>({
-      Nome: "", Data_Nasc: "", Telefone: "", Morada: "", Genero: "M",
-      Ano: new Date().getFullYear(), Turma_Letra: "A", EE_Nome: "",
+      Nome: "", Data_Nasc: "", Telefone: "", Genero: "M",
+      Turma_id: "", 
+      EE_Nome: "", EE_Telefone: "", EE_Email: "", EE_Morada: "", EE_Relacao: ""
   });
+
+  // REF PARA O INPUT DE FICHEIRO (NOVO)
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- FETCH DADOS ---
   const fetchStudents = async () => {
     setLoading(true); 
     try {
-      const baseUrl = "http://127.0.0.1:8000/students/";
-      const url = searchTerm ? `${baseUrl}?search=${encodeURIComponent(searchTerm)}` : baseUrl;
+      const skip = (page - 1) * limit;
+      // Atualizado para incluir sort_by
+      let url = `http://127.0.0.1:8000/students/?skip=${skip}&limit=${limit}&sort_by=${sortBy}`;
+      
+      // Adicionar Filtros à URL
+      if (searchTerm) {
+          url += `&search=${encodeURIComponent(searchTerm)}`;
+      }
+      if (filtroTurma && filtroTurma !== "Todas") {
+          url += `&turma_id=${filtroTurma}`;
+      }
+
       const response = await fetch(url);
       if (!response.ok) throw new Error("Erro ao buscar alunos");
-      const data = await response.json();
-      setAlunos(data);
+      setAlunos(await response.json());
     } catch (error) {
       console.error("Erro:", error);
     } finally {
@@ -115,21 +160,33 @@ const Students = () => {
       try {
           const response = await fetch("http://127.0.0.1:8000/students/disciplinas/list");
           if (response.ok) {
-              const data = await response.json();
-              setDisciplinas(data);
+              setDisciplinas(await response.json());
           }
       } catch (error) {
           console.error("Erro ao buscar disciplinas", error);
       }
   };
 
+  const fetchTurmas = async () => {
+      try {
+          const response = await fetch("http://127.0.0.1:8000/students/turmas/list");
+          if (response.ok) {
+              setTurmas(await response.json());
+          }
+      } catch (error) {
+          console.error("Erro ao buscar turmas", error);
+      }
+  };
+
+  // Recarregar quando página, filtros ou ordenação mudam
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => fetchStudents(), 500);
     return () => clearTimeout(delayDebounceFn);
-  }, [searchTerm]);
+  }, [searchTerm, page, filtroTurma, sortBy]); 
 
   useEffect(() => {
       fetchDisciplines();
+      fetchTurmas(); 
   }, []);
 
   const fetchGrades = async (studentId: number) => {
@@ -139,8 +196,7 @@ const Students = () => {
       if (response.ok) {
         const data: Nota[] = await response.json();
         setNotas(data);
-        const anos = Array.from(new Set(data.map(n => n.Ano_letivo))).sort().reverse();
-        setAnosDisponiveis(anos);
+        setAnosDisponiveis(Array.from(new Set(data.map(n => n.Ano_letivo))).sort().reverse());
       }
     } catch (error) {
       console.error("Erro ao buscar notas:", error);
@@ -157,37 +213,150 @@ const Students = () => {
     fetchGrades(aluno.Aluno_id);
   };
 
-  const handleCreateSubmit = () => {
-      console.log("A criar aluno:", formData);
-      setCreateDialogOpen(false);
-      setFormData({
-        Nome: "", Data_Nasc: "", Telefone: "", Morada: "", Genero: "M",
-        Ano: new Date().getFullYear(), Turma_Letra: "A", EE_Nome: "",
-      });
+  // --- ACTIONS DE PAGINAÇÃO ---
+  const handleNextPage = () => {
+      if (alunos.length === limit) setPage(p => p + 1);
   };
 
+  const handlePrevPage = () => {
+      if (page > 1) setPage(p => p - 1);
+  };
+
+  // --- IMPORT / EXPORT / TEMPLATE (NOVO) ---
+  const handleDownloadTemplate = () => {
+      window.open("http://127.0.0.1:8000/students/data/template", "_blank");
+  };
+
+  const handleExportData = () => {
+      window.open("http://127.0.0.1:8000/students/data/export", "_blank");
+  };
+
+  const handleImportClick = () => {
+      fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+          setLoading(true);
+          const response = await fetch("http://127.0.0.1:8000/students/data/import", {
+              method: "POST",
+              body: formData,
+          });
+
+          if (response.ok) {
+              const data = await response.json();
+              alert(data.message);
+              fetchStudents(); // Recarrega a lista
+          } else {
+              const err = await response.json();
+              alert("Erro na importação: " + err.detail);
+          }
+      } catch (error) {
+          console.error("Erro ao importar:", error);
+          alert("Erro ao enviar ficheiro.");
+      } finally {
+          setLoading(false);
+          if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+  };
+
+  // --- LÓGICA DE CRIAÇÃO (NOVO ALUNO + EE) ---
+  const handleCreateSubmit = async () => {
+      if (!formData.Turma_id) {
+          alert("Por favor selecione uma turma.");
+          return;
+      }
+      
+      // Validação obrigatória do EE
+      if (!formData.EE_Nome || !formData.EE_Telefone || !formData.EE_Email || !formData.EE_Morada || !formData.EE_Relacao) {
+          alert("Erro: Todos os campos do Encarregado de Educação são obrigatórios.");
+          return;
+      }
+
+      // Encontrar a turma selecionada para extrair Ano e Letra
+      const turmaSelecionada = turmas.find(t => t.Turma_id.toString() === formData.Turma_id);
+      
+      const payload = {
+          ...formData,
+          Ano: turmaSelecionada?.Ano || 10,
+          Turma_Letra: turmaSelecionada?.Turma || "A"
+      };
+
+      try {
+        const response = await fetch("http://127.0.0.1:8000/students/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            setCreateDialogOpen(false);
+            fetchStudents(); 
+            // Reset form
+            setFormData({
+                Nome: "", Data_Nasc: "", Telefone: "", Genero: "M",
+                Turma_id: "", 
+                EE_Nome: "", EE_Telefone: "", EE_Email: "", EE_Morada: "", EE_Relacao: ""
+            });
+        } else {
+            alert("Erro ao criar aluno. Verifique os dados.");
+        }
+      } catch (error) {
+          console.error("Erro:", error);
+      }
+  };
+
+  // --- LÓGICA DE PERFIL (EDITAR / ELIMINAR) ---
   const handleStartEditingProfile = () => {
     if (selectedStudent) {
-        setEditProfileData({...selectedStudent});
+        // Encontrar o ID da turma atual baseada no Ano e Letra do aluno
+        const turmaAtual = turmas.find(t => t.Ano === selectedStudent.Turma_Ano && t.Turma === selectedStudent.Turma_Letra);
+        
+        setEditProfileData({
+            ...selectedStudent,
+            Turma_id: turmaAtual ? turmaAtual.Turma_id.toString() : ""
+        });
         setIsEditingProfile(true);
     }
   };
 
   const handleSaveProfile = async () => {
       if (!editProfileData || !selectedStudent) return;
+
+      // Buscar dados da turma selecionada
+      const turmaSelecionada = turmas.find(t => t.Turma_id.toString() === editProfileData.Turma_id);
+
       try {
           const payload = {
               Nome: editProfileData.Nome,
               Telefone: editProfileData.Telefone,
               Data_Nasc: editProfileData.Data_Nasc,
               Genero: editProfileData.Genero,
-              EE_Nome: editProfileData.EE_Nome
+              
+              // Enviamos Ano e Letra extraídos da Turma selecionada
+              Ano: turmaSelecionada?.Ano,
+              Turma_Letra: turmaSelecionada?.Turma,
+              
+              // Dados EE Completos
+              EE_Nome: editProfileData.EE_Nome,
+              EE_Telefone: editProfileData.EE_Telefone,
+              EE_Email: editProfileData.EE_Email,
+              EE_Morada: editProfileData.EE_Morada,
+              EE_Relacao: editProfileData.EE_Relacao
           };
+
           const response = await fetch(`http://127.0.0.1:8000/students/${selectedStudent.Aluno_id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload)
           });
+
           if (response.ok) {
               const updatedAluno = await response.json();
               setSelectedStudent(updatedAluno);
@@ -203,11 +372,32 @@ const Students = () => {
 
   const handleDeleteStudent = async () => {
     if (!selectedStudent) return;
-    setAlunos(alunos.filter(a => a.Aluno_id !== selectedStudent.Aluno_id));
-    setDeleteAlertOpen(false);
-    setIsProfileOpen(false);
+
+    try {
+        // Enviar pedido DELETE ao backend
+        const response = await fetch(`http://127.0.0.1:8000/students/${selectedStudent.Aluno_id}`, { 
+            method: 'DELETE' 
+        });
+
+        if (response.ok) {
+            // Sucesso: Remover da lista visualmente e fechar janelas
+            setAlunos(alunos.filter(a => a.Aluno_id !== selectedStudent.Aluno_id));
+            setDeleteAlertOpen(false); 
+            setIsProfileOpen(false);
+            alert("Aluno eliminado permanentemente.");
+        } else {
+            // Erro do servidor (ex: aluno tem notas associadas)
+            const err = await response.json();
+            alert("Não foi possível eliminar: " + (err.detail || "Erro desconhecido"));
+        }
+    } catch (error) {
+        // Erro de rede
+        console.error("Erro:", error);
+        alert("Erro de conexão ao servidor.");
+    }
   };
 
+  // --- LÓGICA DE NOTAS ---
   const handleOpenAddNota = () => {
       setIsEditingNota(false);
       setNotaForm({
@@ -233,10 +423,8 @@ const Students = () => {
       setIsNotaDialogOpen(true);
   };
 
-  // --- NOVA FUNÇÃO DE ELIMINAR NOTA ---
   const handleDeleteGrade = async () => {
       if (!isEditingNota || notaForm.Nota_id === 0) return;
-
       if (!confirm("Tem a certeza que deseja eliminar esta nota?")) return;
 
       try {
@@ -299,80 +487,168 @@ const Students = () => {
   return (
     <div className="space-y-6 fade-in p-6">
       {/* HEADER */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Gestão de Alunos</h1>
           <p className="text-muted-foreground">Listagem e gestão de matrículas escolar.</p>
         </div>
 
-        {/* DIALOG DE CRIAR NOVO ALUNO */}
-        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="flex gap-2"><Plus size={18} /> Novo Aluno</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-xl">
-             <DialogHeader><DialogTitle>Adicionar Novo Aluno</DialogTitle></DialogHeader>
-             <div className="grid gap-4 py-4">
-                <div className="space-y-1">
-                   <Label>Nome Completo</Label>
-                   <Input value={formData.Nome} onChange={(e) => setFormData({...formData, Nome: e.target.value})} placeholder="Ex: João Silva" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                       <Label>Data de Nascimento</Label>
-                       <Input type="date" value={formData.Data_Nasc} onChange={(e) => setFormData({...formData, Data_Nasc: e.target.value})} />
-                    </div>
-                    <div className="space-y-1">
-                       <Label>Género</Label>
-                       <Select value={formData.Genero} onValueChange={(val: "M"|"F") => setFormData({...formData, Genero: val})}>
-                          <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                          <SelectContent><SelectItem value="M">Masculino</SelectItem><SelectItem value="F">Feminino</SelectItem></SelectContent>
-                       </Select>
-                    </div>
-                </div>
+        {/* BOTÕES DE AÇÃO (IMPORT/EXPORT/NOVO) */}
+        <div className="flex flex-wrap gap-2 w-full xl:w-auto">
+            {/* Input escondido para o upload */}
+            <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileChange} 
+                accept=".xlsx, .xls" 
+                className="hidden" 
+            />
+            
+            <Button variant="outline" onClick={handleDownloadTemplate} className="gap-2">
+                <FileSpreadsheet size={16} /> Template
+            </Button>
+            
+            <Button variant="outline" onClick={handleImportClick} className="gap-2">
+                <Upload size={16} /> Importar
+            </Button>
+            
+            <Button variant="outline" onClick={handleExportData} className="gap-2">
+                <Download size={16} /> Exportar
+            </Button>
 
-                {/* ANO E TURMA */}
-                <div className="flex items-end gap-4 bg-muted/30 p-3 rounded-md border">
-                    <div className="space-y-1 flex-1">
-                       <Label>Ano Escolar</Label>
-                       <Input type="number" value={formData.Ano} onChange={(e) => setFormData({...formData, Ano: parseInt(e.target.value) || 0})} placeholder="Ex: 10" />
+            <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="flex gap-2 bg-blue-600 hover:bg-blue-700"><Plus size={18} /> Novo Aluno</Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                 <DialogHeader><DialogTitle>Ficha de Matrícula</DialogTitle></DialogHeader>
+                 <div className="space-y-4 py-2">
+                    
+                    {/* SECÇÃO 1: ALUNO */}
+                    <div className="bg-muted/30 p-3 rounded border">
+                        <h3 className="font-semibold text-sm mb-2 text-primary">Dados do Aluno</h3>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="col-span-2">
+                               <Label>Nome Completo</Label>
+                               <Input value={formData.Nome} onChange={(e) => setFormData({...formData, Nome: e.target.value})} />
+                            </div>
+                            <div>
+                               <Label>Data Nascimento</Label>
+                               <Input type="date" value={formData.Data_Nasc} onChange={(e) => setFormData({...formData, Data_Nasc: e.target.value})} />
+                            </div>
+                            <div>
+                               <Label>Género</Label>
+                               <Select value={formData.Genero} onValueChange={(val: "M"|"F") => setFormData({...formData, Genero: val})}>
+                                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                                  <SelectContent><SelectItem value="M">Masculino</SelectItem><SelectItem value="F">Feminino</SelectItem></SelectContent>
+                               </Select>
+                            </div>
+                            
+                            {/* SELEÇÃO DE TURMA (DROPDOWN) */}
+                            <div className="col-span-2">
+                                <Label>Turma</Label>
+                                <Select value={formData.Turma_id} onValueChange={(v) => setFormData({...formData, Turma_id: v})}>
+                                    <SelectTrigger><SelectValue placeholder="Selecione a Turma" /></SelectTrigger>
+                                    <SelectContent>
+                                        {turmas.map(t => (
+                                            <SelectItem key={t.Turma_id} value={t.Turma_id.toString()}>
+                                                {t.Ano}º {t.Turma}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
                     </div>
-                    <div className="space-y-1 flex-1">
-                       <Label>Turma (Letra)</Label>
-                       <Input value={formData.Turma_Letra} onChange={(e) => setFormData({...formData, Turma_Letra: e.target.value})} className="uppercase" maxLength={1} placeholder="Ex: A" />
-                    </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                       <Label>Enc. Educação</Label>
-                       <Input value={formData.EE_Nome} onChange={(e) => setFormData({...formData, EE_Nome: e.target.value})} />
+                    {/* SECÇÃO 2: ENCARREGADO DE EDUCAÇÃO */}
+                    <div className="bg-muted/30 p-3 rounded border">
+                        <h3 className="font-semibold text-sm mb-2 text-primary">Encarregado de Educação (Obrigatório)</h3>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="col-span-2">
+                               <Label>Nome Completo *</Label>
+                               <Input value={formData.EE_Nome} onChange={(e) => setFormData({...formData, EE_Nome: e.target.value})} placeholder="Obrigatório"/>
+                            </div>
+                            <div>
+                               <Label>Telefone *</Label>
+                               <Input value={formData.EE_Telefone} onChange={(e) => setFormData({...formData, EE_Telefone: e.target.value})} placeholder="Obrigatório"/>
+                            </div>
+                            <div>
+                               <Label>Relação *</Label>
+                               <Input value={formData.EE_Relacao} onChange={(e) => setFormData({...formData, EE_Relacao: e.target.value})} placeholder="Pai/Mãe..."/>
+                            </div>
+                            <div className="col-span-2">
+                               <Label>Email *</Label>
+                               <Input value={formData.EE_Email} onChange={(e) => setFormData({...formData, EE_Email: e.target.value})} placeholder="exemplo@email.com"/>
+                            </div>
+                            <div className="col-span-2">
+                               <Label>Morada *</Label>
+                               <Input value={formData.EE_Morada} onChange={(e) => setFormData({...formData, EE_Morada: e.target.value})} placeholder="Rua..." />
+                            </div>
+                        </div>
                     </div>
-                    <div className="space-y-1">
-                       <Label>Telefone</Label>
-                       <Input value={formData.Telefone} onChange={(e) => setFormData({...formData, Telefone: e.target.value})} />
-                    </div>
-                </div>
-             </div>
-             <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancelar</Button>
-                <Button onClick={handleCreateSubmit}>Criar Ficha</Button>
-             </div>
-          </DialogContent>
-        </Dialog>
+
+                 </div>
+                 <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancelar</Button>
+                    <Button onClick={handleCreateSubmit}>Confirmar Matrícula</Button>
+                 </div>
+              </DialogContent>
+            </Dialog>
+        </div>
       </div>
 
-      {/* TABELA */}
+      {/* FILTROS E TABELA */}
       <Card>
         <CardHeader className="pb-2">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <CardTitle className="text-lg flex items-center gap-2">
               <GraduationCap className="h-5 w-5 text-primary" />
               Listagem Geral
             </CardTitle>
-            <div className="relative w-64">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Procurar aluno..." className="pl-8 h-9" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/>
+            <div className="flex gap-2 w-full sm:w-auto flex-wrap">
+                
+                {/* ORDENAÇÃO */}
+                <div className="w-[160px]">
+                    <Select value={sortBy} onValueChange={(val: "id" | "name") => setSortBy(val)}>
+                        <SelectTrigger className="h-9">
+                            <ArrowUpDown size={14} className="mr-2 text-muted-foreground"/>
+                            <SelectValue placeholder="Ordenar" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="id">Por Número (ID)</SelectItem>
+                            <SelectItem value="name">Por Nome (A-Z)</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                {/* FILTRO DE TURMA */}
+                <div className="w-[180px]">
+                    <Select value={filtroTurma} onValueChange={(val) => { setFiltroTurma(val); setPage(1); }}>
+                        <SelectTrigger className="h-9">
+                            <Filter size={14} className="mr-2 text-muted-foreground"/>
+                            <SelectValue placeholder="Filtrar Turma" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="Todas">Todas as Turmas</SelectItem>
+                            {turmas.map(t => (
+                                <SelectItem key={t.Turma_id} value={t.Turma_id.toString()}>
+                                    {t.Ano}º {t.Turma}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                {/* BARRA DE PESQUISA */}
+                <div className="relative w-64">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                        placeholder="Procurar aluno..." 
+                        className="pl-8 h-9" 
+                        value={searchTerm} 
+                        onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
+                    />
+                </div>
             </div>
           </div>
         </CardHeader>
@@ -380,6 +656,7 @@ const Students = () => {
           {loading ? (
              <div className="flex justify-center py-10"><Loader2 className="animate-spin" /></div>
           ) : (
+            <>
             <Table>
                 <TableHeader>
                   <TableRow>
@@ -390,21 +667,55 @@ const Students = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {alunos.map((aluno) => (
-                    <TableRow key={aluno.Aluno_id}>
-                      <TableCell>#{aluno.Aluno_id}</TableCell>
-                      <TableCell>
-                          <div className="font-medium">{aluno.Nome}</div>
-                          <div className="text-xs text-muted-foreground">{aluno.Data_Nasc}</div>
-                      </TableCell>
-                      <TableCell><Badge variant="outline">{aluno.Turma_Desc}</Badge></TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={() => handleOpenProfile(aluno)}>Ver Perfil</Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {alunos.length === 0 ? (
+                      <TableRow>
+                          <TableCell colSpan={4} className="text-center h-24 text-muted-foreground">
+                              Sem resultados encontrados.
+                          </TableCell>
+                      </TableRow>
+                  ) : (
+                      alunos.map((aluno) => (
+                        <TableRow key={aluno.Aluno_id}>
+                          <TableCell>#{aluno.Aluno_id}</TableCell>
+                          <TableCell>
+                              <div className="font-medium">{aluno.Nome}</div>
+                              <div className="text-xs text-muted-foreground">{aluno.Data_Nasc}</div>
+                          </TableCell>
+                          <TableCell><Badge variant="outline">{aluno.Turma_Desc}</Badge></TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="sm" onClick={() => handleOpenProfile(aluno)}>Ver Perfil</Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                  )}
                 </TableBody>
             </Table>
+
+            {/* PAGINAÇÃO */}
+            <div className="flex justify-between items-center mt-4 border-t pt-2">
+                <div className="text-sm text-muted-foreground">
+                    Página {page}
+                </div>
+                <div className="flex gap-2">
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handlePrevPage} 
+                        disabled={page === 1}
+                    >
+                        <ChevronLeft size={16} className="mr-1"/> Anterior
+                    </Button>
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleNextPage} 
+                        disabled={alunos.length < limit}
+                    >
+                        Próximo <ChevronRight size={16} className="ml-1"/>
+                    </Button>
+                </div>
+            </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -423,7 +734,7 @@ const Students = () => {
           {selectedStudent && (
             <div className="space-y-6">
               
-              {/* CARTÃO CABEÇALHO */}
+              {/* Header do Perfil */}
               <div className="flex items-center justify-between bg-muted/50 p-4 rounded-lg border">
                 <div className="w-full mr-4">
                   {isEditingProfile && editProfileData ? (
@@ -431,7 +742,6 @@ const Students = () => {
                         value={editProfileData.Nome} 
                         onChange={(e) => setEditProfileData({...editProfileData, Nome: e.target.value})}
                         className="font-bold text-lg bg-white"
-                        placeholder="Nome do Aluno"
                       />
                   ) : (
                     <>
@@ -440,11 +750,9 @@ const Students = () => {
                     </>
                   )}
                 </div>
-                {!isEditingProfile && (
-                  <Badge className="text-base px-3 py-1" variant={selectedStudent.Turma_Desc === "Sem Turma" ? "secondary" : "default"}>
-                    {selectedStudent.Turma_Desc}
-                  </Badge>
-                )}
+                <Badge className="text-base px-3 py-1" variant={selectedStudent.Turma_Desc === "Sem Turma" ? "secondary" : "default"}>
+                  {selectedStudent.Turma_Desc}
+                </Badge>
               </div>
 
               {/* TABS */}
@@ -456,6 +764,8 @@ const Students = () => {
 
                 {/* ABA INFO */}
                 <TabsContent value="info" className="space-y-6">
+                    
+                    {/* DADOS PESSOAIS */}
                     <div className="space-y-3">
                         <h4 className="font-semibold border-b pb-2 text-sm text-muted-foreground uppercase tracking-wide">Dados Pessoais</h4>
                         <div className="grid grid-cols-2 gap-4">
@@ -480,29 +790,98 @@ const Students = () => {
                             </div>
                         </div>
                     </div>
-                    
+
+                    {/* DADOS ESCOLARES (EDIÇÃO COM DROPDOWN) */}
                     <div className="space-y-3">
-                        <h4 className="font-semibold border-b pb-2 text-sm text-muted-foreground uppercase tracking-wide">Contactos & Família</h4>
+                        <h4 className="font-semibold border-b pb-2 text-sm text-muted-foreground uppercase flex items-center gap-2">
+                            <School size={14}/> Dados Escolares
+                        </h4>
+                        <div>
+                            {isEditingProfile && editProfileData ? (
+                                <div className="space-y-1">
+                                    <Label className="text-xs font-medium text-muted-foreground">Turma</Label>
+                                    <Select 
+                                        value={editProfileData.Turma_id || ""} 
+                                        onValueChange={(v) => setEditProfileData({...editProfileData, Turma_id: v})}
+                                    >
+                                        <SelectTrigger className="h-8"><SelectValue placeholder="Selecione a Turma..." /></SelectTrigger>
+                                        <SelectContent>
+                                            {turmas.map(t => (
+                                                <SelectItem key={t.Turma_id} value={t.Turma_id.toString()}>
+                                                    {t.Ano}º {t.Turma}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <Label className="text-xs font-medium text-muted-foreground">Ano</Label>
+                                        <div className="text-sm">{selectedStudent.Turma_Ano ? `${selectedStudent.Turma_Ano}º` : "-"}</div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-xs font-medium text-muted-foreground">Turma</Label>
+                                        <div className="text-sm">{selectedStudent.Turma_Letra || "-"}</div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    
+                    {/* DADOS FAMILIA (EE COMPLETO) */}
+                    <div className="space-y-3">
+                        <h4 className="font-semibold border-b pb-2 text-sm text-muted-foreground uppercase tracking-wide">Família & Contactos (EE)</h4>
                         <div className="grid gap-3">
                             <div>
-                                <Label className="text-xs font-medium text-muted-foreground">Encarregado de Educação</Label>
+                                <Label className="text-xs font-medium text-muted-foreground">Nome Encarregado Educação</Label>
                                 {isEditingProfile && editProfileData ? (
                                     <Input value={editProfileData.EE_Nome} onChange={e => setEditProfileData({...editProfileData, EE_Nome: e.target.value})} className="h-8"/>
                                 ) : (
                                     <p className="text-sm font-medium">{selectedStudent.EE_Nome}</p>
                                 )}
                             </div>
+                            
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <Label className="text-xs font-medium text-muted-foreground">Telefone EE</Label>
+                                    {isEditingProfile && editProfileData ? (
+                                        <Input value={editProfileData.EE_Telefone || ""} onChange={e => setEditProfileData({...editProfileData, EE_Telefone: e.target.value})} className="h-8"/>
+                                    ) : (
+                                        <p className="text-sm flex items-center gap-2"><Phone size={12}/> {selectedStudent.EE_Telefone || "N/A"}</p>
+                                    )}
+                                </div>
+                                <div>
+                                    <Label className="text-xs font-medium text-muted-foreground">Relação</Label>
+                                    {isEditingProfile && editProfileData ? (
+                                        <Input value={editProfileData.EE_Relacao || ""} onChange={e => setEditProfileData({...editProfileData, EE_Relacao: e.target.value})} className="h-8"/>
+                                    ) : (
+                                        <p className="text-sm">{selectedStudent.EE_Relacao || "N/A"}</p>
+                                    )}
+                                </div>
+                            </div>
+
                             <div>
-                                <Label className="text-xs font-medium text-muted-foreground">Telefone</Label>
+                                <Label className="text-xs font-medium text-muted-foreground">Email EE</Label>
                                 {isEditingProfile && editProfileData ? (
-                                    <Input value={editProfileData.Telefone || ""} onChange={e => setEditProfileData({...editProfileData, Telefone: e.target.value})} className="h-8"/>
+                                    <Input value={editProfileData.EE_Email || ""} onChange={e => setEditProfileData({...editProfileData, EE_Email: e.target.value})} className="h-8"/>
                                 ) : (
-                                    <p className="text-sm font-medium">{selectedStudent.Telefone || "N/A"}</p>
+                                    <p className="text-sm flex items-center gap-2"><Mail size={12}/> {selectedStudent.EE_Email || "N/A"}</p>
+                                )}
+                            </div>
+
+                            <div>
+                                <Label className="text-xs font-medium text-muted-foreground">Morada</Label>
+                                {isEditingProfile && editProfileData ? (
+                                    <Input value={editProfileData.EE_Morada || ""} onChange={e => setEditProfileData({...editProfileData, EE_Morada: e.target.value})} className="h-8"/>
+                                ) : (
+                                    <p className="text-sm flex items-center gap-2"><MapPin size={12}/> {selectedStudent.EE_Morada || "N/A"}</p>
                                 )}
                             </div>
                         </div>
                     </div>
 
+                    {/* BOTÕES */}
                     <div className="flex justify-between items-center pt-6 mt-2 border-t">
                         {isEditingProfile ? (
                             <>
@@ -510,7 +889,7 @@ const Students = () => {
                                     <X size={16} className="mr-2" /> Cancelar
                                 </Button>
                                 <Button onClick={handleSaveProfile} className="bg-green-600 hover:bg-green-700">
-                                    <Save size={16} className="mr-2" /> Guardar Alterações
+                                    <Save size={16} className="mr-2" /> Guardar
                                 </Button>
                             </>
                         ) : (
@@ -520,7 +899,8 @@ const Students = () => {
                                 </Button>
                                 <div className="flex gap-2">
                                     <Button variant="outline" onClick={() => setIsProfileOpen(false)}>Fechar</Button>
-                                    <Button onClick={handleStartEditingProfile}><Pencil size={16} className="mr-2" /> Editar Dados</Button>
+                                    <Button onClick={handleStartEditingProfile}><Pencil size={16} className="mr-2" /> Editar
+                                    </Button>
                                 </div>
                             </>
                         )}
@@ -531,19 +911,19 @@ const Students = () => {
                 <TabsContent value="notas" className="space-y-4">
                     <div className="flex justify-between items-center bg-muted/30 p-2 rounded-md border">
                         <div className="flex items-center gap-2">
-                            <Label className="text-xs">Ano Letivo:</Label>
+                            <Label className="text-xs">Ano:</Label>
                             <Select value={anoLetivoFiltro} onValueChange={setAnoLetivoFiltro}>
-                                <SelectTrigger className="h-8 w-[140px]"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="h-8 w-[120px]"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="Todos">Todos</SelectItem>
                                     {anosDisponiveis.map(ano => <SelectItem key={ano} value={ano}>{ano}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
-                        <Button size="sm" onClick={handleOpenAddNota} className="gap-2"><Plus size={14} /> Adicionar Nota</Button>
+                        <Button size="sm" onClick={handleOpenAddNota} className="gap-2"><Plus size={14} /> Nota</Button>
                     </div>
 
-                    <div className="border rounded-md">
+                    <div className="border rounded-md max-h-[400px] overflow-y-auto">
                         {loadingNotas ? (
                             <div className="flex justify-center py-10"><Loader2 className="animate-spin" /></div>
                         ) : notas.length === 0 ? (
@@ -553,12 +933,12 @@ const Students = () => {
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Disciplina</TableHead>
-                                        <TableHead className="w-[100px]">Ano</TableHead>
-                                        <TableHead className="text-center w-[50px]">1ºP</TableHead>
-                                        <TableHead className="text-center w-[50px]">2ºP</TableHead>
-                                        <TableHead className="text-center w-[50px]">3ºP</TableHead>
-                                        <TableHead className="text-center w-[50px] font-bold">Final</TableHead>
-                                        <TableHead className="w-[50px]"></TableHead>
+                                        <TableHead className="w-[80px]">Ano</TableHead>
+                                        <TableHead className="text-center w-[40px]">1P</TableHead>
+                                        <TableHead className="text-center w-[40px]">2P</TableHead>
+                                        <TableHead className="text-center w-[40px]">3P</TableHead>
+                                        <TableHead className="text-center font-bold w-[40px]">Final</TableHead>
+                                        <TableHead className="w-[40px]"></TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -590,7 +970,7 @@ const Students = () => {
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG NOTA (COM BOTÃO ELIMINAR) */}
+      {/* DIALOG NOTA */}
       <Dialog open={isNotaDialogOpen} onOpenChange={setIsNotaDialogOpen}>
         <DialogContent className="max-w-sm">
             <DialogHeader><DialogTitle>{isEditingNota ? "Editar Nota" : "Nova Nota"}</DialogTitle></DialogHeader>
@@ -605,26 +985,25 @@ const Students = () => {
                     </Select>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                    <div className="space-y-1"><Label>1º Período</Label><Input type="number" value={notaForm.Nota_1P} onChange={e => setNotaForm({...notaForm, Nota_1P: e.target.value})}/></div>
-                    <div className="space-y-1"><Label>2º Período</Label><Input type="number" value={notaForm.Nota_2P} onChange={e => setNotaForm({...notaForm, Nota_2P: e.target.value})}/></div>
-                    <div className="space-y-1"><Label>3º Período</Label><Input type="number" value={notaForm.Nota_3P} onChange={e => setNotaForm({...notaForm, Nota_3P: e.target.value})}/></div>
+                    <div className="space-y-1"><Label>1ºP</Label><Input type="number" value={notaForm.Nota_1P} onChange={e => setNotaForm({...notaForm, Nota_1P: e.target.value})}/></div>
+                    <div className="space-y-1"><Label>2ºP</Label><Input type="number" value={notaForm.Nota_2P} onChange={e => setNotaForm({...notaForm, Nota_2P: e.target.value})}/></div>
+                    <div className="space-y-1"><Label>3ºP</Label><Input type="number" value={notaForm.Nota_3P} onChange={e => setNotaForm({...notaForm, Nota_3P: e.target.value})}/></div>
                 </div>
-                <div className="space-y-1"><Label>Nota Final</Label><Input type="number" className="font-bold" value={notaForm.Nota_Final} onChange={e => setNotaForm({...notaForm, Nota_Final: e.target.value})}/></div>
+                <div className="space-y-1"><Label>Final</Label><Input type="number" className="font-bold" value={notaForm.Nota_Final} onChange={e => setNotaForm({...notaForm, Nota_Final: e.target.value})}/></div>
                 <div className="space-y-1"><Label>Ano Letivo</Label><Input value={notaForm.Ano_letivo} onChange={e => setNotaForm({...notaForm, Ano_letivo: e.target.value})}/></div>
             </div>
             
-            {/* BOTÕES COM OPÇÃO ELIMINAR */}
             <div className="flex justify-between items-center mt-2">
                 {isEditingNota ? (
                     <Button variant="destructive" size="sm" onClick={handleDeleteGrade}>
-                        Eliminar
+                        Apagar
                     </Button>
                 ) : (
-                    <div></div> // Espaço vazio para manter o layout
+                    <div></div> 
                 )}
                 <div className="flex gap-2">
                     <Button variant="outline" onClick={() => setIsNotaDialogOpen(false)}>Cancelar</Button>
-                    <Button onClick={handleSaveNota}>Guardar</Button>
+                    <Button onClick={handleSaveNota}>Salvar</Button>
                 </div>
             </div>
         </DialogContent>
