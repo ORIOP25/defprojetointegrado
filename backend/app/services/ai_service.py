@@ -14,103 +14,128 @@ client = genai.Client(api_key=api_key) if api_key else None
 
 def get_school_context(db: Session):
     """
-    COLETA DE DADOS BRUTOS (RAW DATA).
-    O objetivo é não 'mastigar' a informação. A IA deve receber os factos 
-    e tirar as suas próprias conclusões.
+    COLETA E PRÉ-PROCESSAMENTO HÍBRIDO.
+    O Python calcula as métricas exatas (médias, contagens) para evitar alucinações.
+    A IA recebe apenas os factos consumados para gerar a narrativa.
     """
     
-    # --- 1. MAPEAMENTO DE ESTRUTURA E RH (CUSTOS VS RECURSOS) ---
-    # Buscamos professores com os seus salários (Escalão) para análise de ROI
+    # --- 1. PREPARAR DADOS DE PROFESSORES ---
     profs_db = db.query(models.Professor).options(joinedload(models.Professor.escalao)).all()
-    professores = []
+    prof_stats = {} 
+    
     for p in profs_db:
-        professores.append({
+        salario = float(p.escalao.Valor_Base) if p.escalao else 0
+        prof_stats[p.Nome] = {
             "ID": p.Professor_id,
-            "Nome": p.Nome,
-            "Dept": p.departamento.Nome if p.departamento else "Geral",
-            "Idade": (date.today() - p.Data_Nasc).days // 365,
-            "Salario": float(p.escalao.Valor_Base) if p.escalao else 0,
-            "Escalao": p.escalao.Nome if p.escalao else "N/A"
-        })
+            "Escalao": p.escalao.Nome if p.escalao else "N/A",
+            "Salario": salario,
+            "Soma_Notas": 0,
+            "Qtd_Notas": 0,
+            "Turmas": set()
+        }
 
-    # Mapa: Quem dá aula a quem? (Fundamental para atribuir culpas/méritos)
+    # Mapa de Atribuições: (TurmaID, DiscID) -> Nome Professor
+    # Isto permite saber quem deu a nota X ao aluno Y
     atribuicoes = db.query(models.TurmaDisciplina).all()
-    # Chave: "TurmaID_DisciplinaID" -> Valor: "NomeProfessor"
-    mapa_professores = {}
-    for a in atribuicoes:
-        key = f"{a.Turma_id}_{a.Disc_id}"
-        mapa_professores[key] = next((p["Nome"] for p in professores if p["ID"] == a.Professor_id), "N/A")
+    mapa_aulas = {}
+    prof_id_nome = {p.Professor_id: p.Nome for p in profs_db}
 
-    # --- 2. DADOS DE ALUNOS (COMPORTAMENTO + ACADÉMICO) ---
-    # Carregar tudo de uma vez para eficiência
+    for a in atribuicoes:
+        key = (a.Turma_id, a.Disc_id)
+        nome_prof = prof_id_nome.get(a.Professor_id)
+        if nome_prof:
+            mapa_aulas[key] = nome_prof
+
+    # --- 2. PROCESSAR ALUNOS E ATRIBUIR METRICAS ---
     alunos_db = db.query(models.Aluno).options(
         joinedload(models.Aluno.notas).joinedload(models.Nota.disciplina),
-        joinedload(models.Aluno.faltas).joinedload(models.Falta.disciplina),
-        joinedload(models.Aluno.ocorrencias),
-        joinedload(models.Aluno.turma)
+        joinedload(models.Aluno.faltas),
+        joinedload(models.Aluno.turma) 
     ).all()
 
-    lista_alunos = []
-    
+    alunos_analise = [] # Lista final de alunos processados
+
     for aluno in alunos_db:
-        # Organizar Notas por Disciplina
-        notas_dict = {}
+        # Ignorar alunos sem turma ou notas
+        if not aluno.turma: continue
+        
+        turma_str = f"{aluno.turma.Ano}º{aluno.turma.Turma}"
+        notas_finais = []
+        detalhe_negativas = []
+        
+        # Analisar cada nota do aluno
         for n in aluno.notas:
-            nome_disc = n.disciplina.Nome
-            if nome_disc not in notas_dict: notas_dict[nome_disc] = []
-            # Enviamos a evolução temporal das notas [P1, P2, Final]
-            notas_dict[nome_disc] = [n.Nota_1P or 0, n.Nota_2P or 0, n.Nota_Final or 0]
+            if n.Nota_Final is not None:
+                notas_finais.append(n.Nota_Final)
+                
+                # Atribuir estatística ao Professor
+                key_aula = (aluno.Turma_id, n.Disc_id)
+                nome_prof = mapa_aulas.get(key_aula)
+                
+                if nome_prof and nome_prof in prof_stats:
+                    prof_stats[nome_prof]["Soma_Notas"] += n.Nota_Final
+                    prof_stats[nome_prof]["Qtd_Notas"] += 1
+                    prof_stats[nome_prof]["Turmas"].add(turma_str)
 
-        # Organizar Faltas
-        faltas_summary = {"Total": 0, "Disciplinas_Afetadas": []}
-        if aluno.faltas:
-            faltas_summary["Total"] = len(aluno.faltas)
-            # Lista de disciplinas onde faltou e se foi justificado
-            detalhe_faltas = [f"{f.disciplina.Nome} ({'J' if f.Justificada else 'I'})" for f in aluno.faltas if f.disciplina]
-            faltas_summary["Disciplinas_Afetadas"] = detalhe_faltas
+                # Detetar Quedas Graves (P1 -> Final)
+                p1 = n.Nota_1P or n.Nota_Final
+                queda = n.Nota_Final - p1
+                
+                if n.Nota_Final < 10:
+                    disc_nome = n.disciplina.Nome if n.disciplina else "Disc"
+                    info_queda = f" (Caiu {abs(queda)} valores)" if queda < -2 else ""
+                    detalhe_negativas.append(f"{disc_nome}: {n.Nota_Final}{info_queda} [Prof: {nome_prof or 'N/A'}]")
 
-        # Organizar Ocorrências (Comportamento)
-        ocorrencias_lista = []
-        for o in aluno.ocorrencias:
-            ocorrencias_lista.append(f"[{o.Data}] ({o.Tipo.value}) {o.Descricao}")
+        # Se o aluno tiver dados relevantes, guardar
+        if notas_finais:
+            media = sum(notas_finais) / len(notas_finais)
+            
+            # Só nos interessam alunos com problemas para o relatório (Top Risco)
+            if len(detalhe_negativas) >= 2 or media < 9.5:
+                alunos_analise.append({
+                    "Nome": aluno.Nome,
+                    "Turma": turma_str,
+                    "Media_Global": round(media, 2),
+                    "Total_Negativas": len(detalhe_negativas),
+                    "Faltas_Total": len(aluno.faltas),
+                    "Disciplinas_Criticas": detalhe_negativas
+                })
 
-        # Identificar Professor de cada disciplina deste aluno
-        # Para que a IA saiba: "Este aluno tem más notas a Mat com o Prof X"
-        profs_aluno = {}
-        if aluno.turma:
-            # Reconstruir o mapa baseando-se nas disciplinas que ele tem notas
-            for n in aluno.notas:
-                key = f"{aluno.Turma_id}_{n.Disc_id}"
-                profs_aluno[n.disciplina.Nome] = mapa_professores.get(key, "N/A")
+    # Ordenar alunos por gravidade (mais negativas primeiro)
+    alunos_analise.sort(key=lambda x: x["Total_Negativas"], reverse=True)
 
-        lista_alunos.append({
-            "Nome": aluno.Nome,
-            "Turma": f"{aluno.turma.Ano}º{aluno.turma.Turma}" if aluno.turma else "S/T",
-            "Genero": aluno.Genero.value,
-            "Notas_Evolucao": notas_dict, # Ex: {"Mat": [10, 8, 8]} -> IA vê a queda
-            "Professores": profs_aluno,   # Ex: {"Mat": "Prof. Mau"}
-            "Faltas": faltas_summary,
-            "Comportamento": ocorrencias_lista
-        })
+    # --- 3. FECHAR CONTAS DOS PROFESSORES (ROI) ---
+    tabela_docentes = []
+    for nome, dados in prof_stats.items():
+        if dados["Qtd_Notas"] > 0:
+            media_prof = round(dados["Soma_Notas"] / dados["Qtd_Notas"], 2)
+            
+            # Lógica de Negócio (Python define a etiqueta, IA apenas lê)
+            tag_roi = "Normal"
+            if dados["Salario"] > 2200 and media_prof < 10:
+                tag_roi = "ALERTA: Custo Elevado / Baixo Rendimento"
+            elif dados["Salario"] < 1800 and media_prof > 14:
+                tag_roi = "DESTAQUE: Talento (Custo Baixo / Alto Rendimento)"
+            
+            tabela_docentes.append({
+                "Professor": nome,
+                "Escalao": dados["Escalao"],
+                "Salario": f"{dados['Salario']}€",
+                "Media_Alunos": media_prof,
+                "Tag_Gestao": tag_roi
+            })
+    
+    tabela_docentes.sort(key=lambda x: x["Media_Alunos"])
 
-    # --- 3. FINANÇAS ---
-    transacoes = db.query(models.Transacao).limit(50).all()
-    financas = [{
-        "Data": str(t.Data),
-        "Tipo": t.Tipo.value,
-        "Valor": float(t.Valor or 0),
-        "Desc": t.Descricao
-    } for t in transacoes]
+    # --- 4. FINANÇAS SIMPLIFICADAS ---
+    transacoes = db.query(models.Transacao).order_by(models.Transacao.Data.desc()).limit(15).all()
+    financas = [{"Data": str(t.Data), "Tipo": t.Tipo.value, "Valor": float(t.Valor or 0), "Desc": t.Descricao} for t in transacoes]
 
-    # --- PACOTE FINAL PARA O CÉREBRO DA IA ---
+    # RETORNO MASTIGADO
     return {
-        "RECURSOS_HUMANOS": professores,
-        "ALUNOS_DETALHADO": lista_alunos, # A IA terá de iterar isto para achar padrões
-        "FINANCAS_TRANSACOES": financas,
-        "META_INFO": {
-            "Total_Alunos": len(lista_alunos),
-            "Data_Relatorio": str(date.today())
-        }
+        "ANALISE_DOCENTE_PRE_CALCULADA": tabela_docentes,
+        "ALUNOS_CRITICOS_TOP_15": alunos_analise[:15], # Apenas os 15 piores para poupar tokens
+        "FINANCAS_RECENTES": financas
     }
 
 def get_latest_report(db: Session):
