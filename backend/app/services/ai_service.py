@@ -47,7 +47,7 @@ def get_school_context(db: Session):
         joinedload(models.Aluno.notas).joinedload(models.Nota.disciplina),
         joinedload(models.Aluno.faltas).joinedload(models.Falta.disciplina),
         joinedload(models.Aluno.ocorrencias),
-        joinedload(models.Aluno.turma_obj)
+        joinedload(models.Aluno.turma)
     ).all()
 
     lista_alunos = []
@@ -77,7 +77,7 @@ def get_school_context(db: Session):
         # Identificar Professor de cada disciplina deste aluno
         # Para que a IA saiba: "Este aluno tem más notas a Mat com o Prof X"
         profs_aluno = {}
-        if aluno.turma_obj:
+        if aluno.turma:
             # Reconstruir o mapa baseando-se nas disciplinas que ele tem notas
             for n in aluno.notas:
                 key = f"{aluno.Turma_id}_{n.Disc_id}"
@@ -85,7 +85,7 @@ def get_school_context(db: Session):
 
         lista_alunos.append({
             "Nome": aluno.Nome,
-            "Turma": f"{aluno.turma_obj.Ano}º{aluno.turma_obj.Turma}" if aluno.turma_obj else "S/T",
+            "Turma": f"{aluno.turma.Ano}º{aluno.turma.Turma}" if aluno.turma else "S/T",
             "Genero": aluno.Genero.value,
             "Notas_Evolucao": notas_dict, # Ex: {"Mat": [10, 8, 8]} -> IA vê a queda
             "Professores": profs_aluno,   # Ex: {"Mat": "Prof. Mau"}
@@ -128,40 +128,65 @@ def generate_and_save_insights(db: Session):
         # PROMPT DE ENGENHARIA DE DADOS
         # Ensinamos a IA a pensar como um Gestor Escolar
         prompt = f"""
-        Tu és um Consultor de Gestão Escolar de Elite.
-        Tens acesso aos dados RAW da escola (JSON abaixo).
+        Tu és o Consultor Estratégico de Elite do SIGE. O Diretor paga-te para encontrares problemas graves e oportunidades de ouro, não para descreveres o óbvio.
         
-        A tua tarefa é cruzar dados para encontrar Insights que um humano não veria facilmente.
+        --- TUA MISSÃO ---
+        Analisa os dados RAW abaixo. Ignora a média. Procura os **Outliers** (os extremos).
         
         --- DADOS ---
         {json.dumps(dados, ensure_ascii=False)}
         
-        --- OBJETIVOS DA ANÁLISE ---
-        1. **Desempenho Docente (ROI):** Cruza os salários dos professores com as notas dos alunos deles. Existe algum professor muito caro com maus resultados? Ou um barato com ótimos resultados?
-        2. **Comportamento vs Notas:** Analisa os alunos com "Ocorrências" ou muitas "Faltas". A queda das notas coincide com o mau comportamento?
-        3. **Alertas Críticos:** Identifica alunos em "Queda Livre" (começaram bem e acabaram mal).
+        --- REGRAS ESTRITAS DE GERAÇÃO ---
+        1. **Lei do Top 5:** Para cada insight, a lista de 'detalhes' NÃO PODE ter mais de 5 linhas. Escolhe apenas os 5 casos mais chocantes. Se houver 60 alunos em risco, mostra apenas os 5 piores e diz na descrição "Identificados 60 alunos, sendo estes os 5 mais críticos...".
         
-        --- FORMATO DE SAÍDA (JSON ESTRITO) ---
-        Deves gerar um JSON compatível com o frontend:
+        2. **Foco no ROI (Professores):**
+           - Encontra professores com Salário Alto (>2000€) e Média de Notas Baixa (<10). Isto é um "Alerta de Ineficiência".
+           - Encontra professores com Salário Baixo e Média Alta. Isto é um "Talento a Reter".
+        
+        3. **Detetive de Quedas (Alunos):**
+           - Não listes apenas notas baixas. Procura a **Queda**. Quem tinha 15 e agora tem 8?
+           - Na tabela de detalhes, não ponhas todas as notas. Põe apenas a disciplina do problema (ex: "Matemática: 14 -> 8").
+        
+        4. **Formatação Limpa:** - Nas tabelas ('detalhes'), as chaves devem ser curtas e bonitas (ex: "Professor", "Salario", "Media_Turma" em vez de "nome_do_professor_com_underscores").
+           - Valores monetários formatados (ex: "2.300 €").
+
+        --- FORMATO JSON DE RESPOSTA ---
         [
           {{
-            "categoria": "Titulo da Categoria (ex: Recursos Humanos, Risco Escolar)",
-            "cor": "blue" (ou red/green),
+            "categoria": "Eficiência Docente (RH)",
+            "cor": "blue",
             "insights": [
               {{
-                "tipo": "negativo" (ou positivo/neutro),
-                "titulo": "Resumo curto",
-                "descricao": "Explicação detalhada da causalidade encontrada.",
-                "sugestao": "Ação concreta para o diretor.",
-                "detalhes": [ {{ "Chave": "Valor", "Chave2": "Valor2" }} ] (Tabela de evidências)
+                "tipo": "negativo", 
+                "titulo": "Alerta de Custo-Benefício: Docentes Caros com Baixo Rendimento",
+                "descricao": "Detetados 2 professores do topo da carreira cujas turmas apresentam média negativa consistente. Situação crítica de ROI.",
+                "sugestao": "Agendar reunião de avaliação pedagógica com estes docentes e rever atribuição de turmas.",
+                "detalhes": [
+                  {{ "Professor": "Nome X", "Escalao": "Esc 9", "Custo_Mensal": "3.100 €", "Media_Atribuida": "9.4", "Status": "CRÍTICO" }}
+                ]
               }}
+            ]
+          }},
+          {{
+            "categoria": "Risco Académico",
+            "cor": "red",
+            "insights": [
+               {{
+                 "tipo": "negativo",
+                 "titulo": "Alunos em Queda Livre (Top 5 Críticos)",
+                 "descricao": "Estes alunos tiveram um colapso de rendimento superior a 4 valores. Forte correlação com faltas.",
+                 "sugestao": "Contacto urgente com Encarregados de Educação.",
+                 "detalhes": [
+                    {{ "Aluno": "Nome Y", "Turma": "10ºA", "Disciplina": "Matemática A", "Queda": "16 -> 8 (-8)", "Faltas": "5 (Injust.)" }}
+                 ]
+               }}
             ]
           }}
         ]
         """
         
         response = client.models.generate_content(
-            model="gemini-2.5-pro", # Usar Flash para rapidez e janela de contexto grande
+            model="gemini-2.5-flash-lite", # Usar Flash para rapidez e janela de contexto grande
             contents=prompt,
             config=types.GenerateContentConfig(response_mime_type="application/json")
         )
@@ -182,23 +207,42 @@ def chat_with_data(db: Session, user_message: str):
         dados = get_school_context(db)
         
         prompt = f"""
-        Tu és o Cérebro Analítico do SIGE. Estás a falar com o Diretor da Escola.
-        Tens acesso total à base de dados em JSON abaixo.
+        Atua como um Consultor de Gestão Escolar Sénior e Analista de Dados do SIGE.
+        O teu interlocutor é o Diretor da Escola. Ele exige respostas factuais, profundas e estratégicas para a tomada de decisão.
 
-        --- DADOS DO SISTEMA ---
+        --- CONTEXTO DE DADOS (A TUA FONTE DE VERDADE) ---
+        Tens acesso exclusivo aos seguintes dados da escola:
         {json.dumps(dados, ensure_ascii=False)}
 
-        --- INSTRUÇÕES ---
-        1. **Cruza Tabelas:** Se perguntarem por um aluno, verifica quem são os professores dele e se ele tem faltas nessas aulas específicas.
-        2. **Sê Específico:** Não digas "as notas variam". Diz "As notas variam entre 10 e 18, com queda acentuada a Matemática no 2º período".
-        3. **Contexto Financeiro:** Se a pergunta tocar em dinheiro, verifica sempre se os salários (Recursos Humanos) não são a causa oculta do problema.
-        4. **Estilo:** Profissional, direto, Português de Portugal. Usa Markdown para tabelas se necessário.
+        --- DIRETRIZES DE RESPOSTA ---
+        1. **Precisão Cirúrgica:** Nunca generalizes. Em vez de dizer "alguns alunos desceram", diz "3 alunos (ex: João Silva) desceram mais de 4 valores a Matemática". Usa sempre números, percentagens e nomes específicos quando disponíveis nos dados.
 
-        --- PERGUNTA DO UTILIZADOR ---
+        2. **Regra do "Top 5":** Se identificares muitos casos (ex: mais de 5 alunos em risco), NÃO faças listas infinitas. 
+           - Apresenta uma tabela ou lista apenas com os **5 casos mais graves**.
+           - Resume o resto: "Identifiquei mais X alunos com padrões semelhantes..."
+        
+        3. **Análise Cruzada (O Teu Superpoder):**
+           - Ao analisar um **Aluno**: Não olhes só para as notas. Verifica se a descida de notas coincide com um aumento de faltas ou ocorrências disciplinares. Verifica quem é o professor dessa disciplina específica.
+           - Ao analisar **Professores**: Cruza o seu custo (salário/escalão) com o rendimento académico das suas turmas. Identifica casos de alto custo/baixo rendimento ou baixo custo/alto rendimento.
+           - Ao analisar **Finanças**: Detalha despesas. Se houver um valor alto, identifica o fornecedor e a data.
+
+        4. **Protocolo de Ausência de Dados:** - Se a pergunta exigir dados que não estão no JSON acima, responde apenas: "Não disponho dessa informação específica nos registos atuais." 
+           - **Proibido:** Nunca menciones "limitações da API", "funções Python", "JSON incompleto" ou desculpas técnicas. Mantém a ilusão de um sistema integrado.
+
+        5. **Tom e Formatação:**
+           - Usa um tom profissional, executivo mas humano. Sê o braço direito do diretor.
+           - Usa tabelas Markdown APENAS se tiveres mais de 3 colunas de dados para comparar. Se for simples, usa listas (`*`).
+           - Usa negrito para destacar valores críticos (ex: **Queda de 50%**).
+           - Idioma: Português de Portugal.
+
+        --- OBJETIVO FINAL ---
+        A tua resposta deve ser tão completa que o Diretor não precise de fazer uma pergunta de seguimento. Antecipa as necessidades dele. Se ele pergunta "Quem é o pior aluno?", diz quem é, em que disciplina, quem é o professor, se tem faltas e qual a tendência.
+
+        --- PERGUNTA DO DIRETOR ---
         "{user_message}"
         """
         
-        response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+        response = client.models.generate_content(model="gemini-2.5-flash-lite", contents=prompt)
         return response.text
     except Exception as e:
         print(f"Erro Chat: {e}")
