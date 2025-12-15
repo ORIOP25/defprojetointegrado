@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.endpoints import auth, finances, dashboard, students, staff, turmas, disciplinas, ai_advisor, ai_chat
 from app.db.database import engine, Base
 
+# Criar tabelas se não existirem
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -11,11 +12,14 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# --- CONFIGURAÇÃO CORS ---
+# Adicionámos "*" para permitir acesso de qualquer IP na rede local (Telemóveis, Tablets, etc)
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:8080",
     "http://127.0.0.1:8080",
+    "*" # <--- IMPORTANTE: Permite acesso via rede (ex: 192.168.1.5)
 ]
 
 app.add_middleware(
@@ -26,12 +30,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-#Rotas
+# --- ROTAS ---
 app.include_router(auth.router, prefix="/auth", tags=["Autenticação"])
 app.include_router(finances.router, prefix="/financas", tags=["Relatórios Financeiros"])
 app.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
 app.include_router(staff.router, prefix="/staff", tags=["Gestão de Staff"])
-app.include_router(staff.router, prefix="/staff", tags=["Staff"])
 app.include_router(students.router, prefix="/students", tags=["Gestão de Alunos"])
 app.include_router(turmas.router, prefix="/turmas", tags=["Turmas"])
 app.include_router(disciplinas.router, prefix="/disciplinas", tags=["Disciplinas"])
@@ -48,4 +51,5 @@ def read_root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    # ALTERADO: host="0.0.0.0" para permitir acesso externo (rede local)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
