@@ -12,6 +12,8 @@ import {
   Menu,
   X,
   UserCircle,
+  School, // <--- ADICIONADO: Ícone de Escola
+  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,7 +29,6 @@ import {
   SheetContent,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { MessageSquare } from "lucide-react";
 
 const Layout = () => {
   const location = useLocation();
@@ -49,37 +50,43 @@ const Layout = () => {
       title: "Dashboard",
       href: "/dashboard",
       icon: LayoutDashboard,
-      show: true, // Todos veem
+      show: true, 
     },
     {
       title: "Alunos",
       href: "/students",
       icon: GraduationCap,
-      show: true, // Todos veem
+      show: true, 
+    },
+    {
+      title: "Turmas", // <--- ADICIONADO: Menu de Turmas
+      href: "/classes",
+      icon: School,
+      show: true, 
     },
     {
       title: "Staff",
       href: "/staff",
       icon: Users,
-      show: true, // Todos veem (a proteção de edição é interna à página)
+      show: true, 
     },
     {
       title: "Finanças",
       href: "/finances",
       icon: Receipt,
-      show: isGlobalAdmin, // Apenas Admin
+      show: isGlobalAdmin, 
     },
     {
       title: "Recomendações IA",
       href: "/recommendations",
       icon: Lightbulb,
-      show: isGlobalAdmin, // Apenas Admin
+      show: isGlobalAdmin, 
     },
     {
       title: "Chat IA",
       href: "/chat",
       icon: MessageSquare,
-      show: isGlobalAdmin, // Ou 'true' se quiseres que todos vejam
+      show: isGlobalAdmin, 
     },
   ];
 

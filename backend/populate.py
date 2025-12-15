@@ -1,12 +1,13 @@
 import random
 from datetime import date, timedelta
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from app.db.database import SessionLocal, engine, Base
 from app.db.models import (
     Departamento, Escalao, Professor, Staff, Turma,
     EncarregadoEducacao, Aluno, Disciplina, Nota, Financiamento, 
     Fornecedor, Transacao, GeneroEnum, TipoTransacaoEnum, AIRecommendation,
-    TurmaDisciplina, Falta, Ocorrencia, TipoOcorrenciaEnum
+    TurmaDisciplina, Falta, Ocorrencia, TipoOcorrenciaEnum, Matricula
 )
 from app.core.security import get_password_hash
 
@@ -22,8 +23,7 @@ LOCAIS = ["Lisboa", "Porto", "Coimbra", "Braga", "Aveiro", "Faro", "Viseu", "Lei
 # Lista de Departamentos
 DEPARTAMENTOS_LISTA = ["Ciências Exatas", "Línguas", "Artes", "Ciências Sociais", "Desporto", "Serviços Admin"]
 
-# Configuração dos Escalões (Nome Curto <= 10 chars, Valor Base)
-# CORREÇÃO: Nomes encurtados para caber no String(10)
+# Configuração dos Escalões
 ESCALOES_CONFIG = [
     ("Esc 1", 1714.11),
     ("Esc 2", 1910.67),
@@ -39,7 +39,7 @@ ESCALOES_CONFIG = [
 
 DISCIPLINAS_CONFIG = [
     {"nome": "Matemática A", "cat": "Ciências"},
-    {"nome": "Fís-Química A", "cat": "Ciências"}, # Encurtado por segurança
+    {"nome": "Fís-Química A", "cat": "Ciências"}, 
     {"nome": "Português", "cat": "Línguas"},
     {"nome": "Inglês", "cat": "Línguas"},
     {"nome": "História A", "cat": "Humanidades"},
@@ -70,15 +70,29 @@ def gerar_telefone():
     return f"9{random.choice([1, 2, 3, 6])}{random.randint(1000000, 9999999)}"
 
 def limpar_string(texto):
-    # Remove acentos e converte para minúsculas para emails
     return texto.lower().replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u").replace("ç", "c").replace("ã", "a").replace(" ", ".")
 
 def populate_advanced():
     db = SessionLocal()
+    # Conjuntos para garantir unicidade durante a execução do script
+    emails_staff_usados = set()
+    emails_prof_usados = set()
+
     try:
         print("🧹 A Limpar a Base de Dados antiga...")
+        
+        # 1. DESATIVAR VERIFICAÇÕES DE SEGURANÇA
+        db.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+        db.commit()
+        
+        # 2. ELIMINAR E RECRIAR TABELAS
         Base.metadata.drop_all(bind=engine)
         Base.metadata.create_all(bind=engine)
+        print("✅ Tabelas recriadas com sucesso.")
+        
+        # 3. REATIVAR VERIFICAÇÕES
+        db.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+        db.commit()
 
         # ---------------------------------------------------------
         # 1. DEPARTAMENTOS & ESCALÕES
@@ -92,9 +106,7 @@ def populate_advanced():
             dept_objs.append(dept)
         db.commit() 
         
-        # Garantir IDs frescos
         dept_objs = db.query(Departamento).all()
-        # Identificar o departamento admin (o último ou pelo nome)
         dept_admin = next((d for d in dept_objs if "Admin" in d.Nome), dept_objs[-1])
 
         esc_objs = []
@@ -115,7 +127,7 @@ def populate_advanced():
             Nome="Admin Principal",
             email="admin@escola.pt",
             hashed_password=get_password_hash("pass"),
-            role="admin", # Importante ser "admin"
+            role="admin", 
             Cargo="Diretor",
             Depart_id=dept_admin.Depart_id,
             Telefone=gerar_telefone(),
@@ -124,13 +136,22 @@ def populate_advanced():
             Escalao="Direção"
         )
         db.add(admin)
+        emails_staff_usados.add("admin@escola.pt")
 
-        # 2.2 STAFF (Não Docente)
+        # 2.2 STAFF
         for i in range(15):
             nome = gerar_nome()
             primeiro = nome.split()[0]
             ultimo = nome.split()[-1]
-            email = f"{limpar_string(primeiro)}.{limpar_string(ultimo)}@escola.pt"
+            base_email = f"{limpar_string(primeiro)}.{limpar_string(ultimo)}"
+            email = f"{base_email}@escola.pt"
+            
+            # Lógica Anti-Duplicação para Staff
+            counter = 1
+            while email in emails_staff_usados:
+                email = f"{base_email}{counter}@escola.pt"
+                counter += 1
+            emails_staff_usados.add(email)
             
             s = Staff(
                 Nome=nome,
@@ -148,24 +169,30 @@ def populate_advanced():
         
         # 2.3 PROFESSORES
         professores = []
-        # Depts docentes são todos menos o Admin
         depts_docentes = [d for d in dept_objs if "Admin" not in d.Nome]
 
         for i in range(30):
             nome = gerar_nome()
             primeiro = nome.split()[0]
             ultimo = nome.split()[-1]
-            email = f"{limpar_string(primeiro)}.{limpar_string(ultimo)}@escola.pt"
+            base_email = f"{limpar_string(primeiro)}.{limpar_string(ultimo)}"
+            email = f"{base_email}@escola.pt"
+
+            # Lógica Anti-Duplicação para Professores
+            counter = 1
+            while email in emails_prof_usados:
+                email = f"{base_email}{counter}@escola.pt"
+                counter += 1
+            emails_prof_usados.add(email)
             
             dept_random = random.choice(depts_docentes)
-            # Distribuição de escalões (mais no meio da carreira)
             esc_random = random.choices(esc_objs, weights=[5, 10, 20, 20, 15, 10, 10, 5, 3, 2])[0]
 
             p = Professor(
                 Nome=nome,
                 email=email,
                 hashed_password=get_password_hash("123"),
-                role="teacher", # Usar 'teacher' para consistência com frontend
+                role="teacher", 
                 Data_Nasc=date(random.randint(1965, 1995), random.randint(1, 12), random.randint(1, 28)),
                 Telefone=gerar_telefone(),
                 Morada=gerar_morada(),
@@ -187,7 +214,6 @@ def populate_advanced():
         db.commit()
 
         turmas = []
-        # Cria turmas do 5º ao 12º ano (A, B, C)
         for ano in range(5, 13):
             for letra in ["A", "B", "C"]:
                 dt = random.choice(professores)
@@ -199,7 +225,6 @@ def populate_advanced():
         # Atribuir Disciplinas às Turmas
         for turma in turmas:
             discs_turma = random.sample(disciplinas, k=6)
-            # Garantir Portugues e Ed Fisica
             pt = next((d for d in disciplinas if "Português" in d.Nome), None)
             ef = next((d for d in disciplinas if "Física" in d.Nome and "Ed" in d.Nome), None)
             
@@ -213,17 +238,15 @@ def populate_advanced():
         db.commit()
 
         # ---------------------------------------------------------
-        # 4. ALUNOS COMPLETOS
+        # 4. ALUNOS COMPLETOS (COM MATRÍCULAS)
         # ---------------------------------------------------------
-        print("🎓 A matricular Alunos (com EE, Notas e Faltas)...")
+        print("🎓 A matricular Alunos (com EE, Notas, Faltas e Matrícula)...")
 
         for turma in turmas:
-            # 22 alunos por turma
             num_alunos = 22
             
             for _ in range(num_alunos):
                 genero_str = random.choice(["M", "F"])
-                # Mapear para Enum se necessário (depende do DB driver, mas string costuma passar)
                 genero_enum = GeneroEnum.M if genero_str == "M" else GeneroEnum.F
                 
                 nome_aluno = gerar_nome(genero_str)
@@ -248,19 +271,26 @@ def populate_advanced():
                 ano_nasc = 2024 - turma.Ano - 6
                 aluno = Aluno(
                     Nome=nome_aluno,
-                    Data_Nasc=date(ano_nasc, random.randint(1, 12), random.randint(1, 28)),
+                    Data_Nasc=str(date(ano_nasc, random.randint(1, 12), random.randint(1, 28))),
                     Telefone=gerar_telefone(),
                     Morada=morada_familia,
                     Genero=genero_enum,
-                    Ano=turma.Ano,
-                    Turma_id=turma.Turma_id,
-                    Escalao=random.choice(["A", "B", "C", None, None]), # C é sem escalão no frontend as vezes
-                    EE_id=ee.EE_id
+                    Turma_id=turma.Turma_id, 
+                    Enc_Educacao_id=ee.EE_id, 
+                    Escalao=random.choice(["A", "B", "C", None, None]),
+                    Ano=turma.Ano
                 )
                 db.add(aluno)
                 db.flush()
 
-                # 3. Notas e Faltas
+                # 3. CRIAR MATRÍCULA
+                matricula = Matricula(
+                    Aluno_id=aluno.Aluno_id,
+                    Turma_id=turma.Turma_id
+                )
+                db.add(matricula)
+
+                # 4. Notas e Faltas
                 discs_desta_turma = db.query(TurmaDisciplina).filter_by(Turma_id=turma.Turma_id).all()
                 perfil = random.choices(["bom", "medio", "mau"], weights=[20, 60, 20])[0]
 
@@ -294,7 +324,7 @@ def populate_advanced():
                             )
                             db.add(f)
                 
-                # 4. Ocorrência (raro)
+                # 5. Ocorrência (raro)
                 if perfil == "mau" and random.random() > 0.8:
                     oc = Ocorrencia(
                         Aluno_id=aluno.Aluno_id,

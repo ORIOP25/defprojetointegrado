@@ -18,6 +18,12 @@ class StaffDisplay(BaseModel):
     Nome: str
     Cargo: Optional[str] = None
     role: str
+    # Novos campos para o Perfil
+    Telefone: Optional[str] = None
+    Morada: Optional[str] = None
+    Salario: Optional[float] = 0.0
+    Escalao: Optional[str] = None
+    Departamento: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -26,7 +32,8 @@ class StaffDisplay(BaseModel):
 
 class AlunoBase(BaseModel):
     Nome: str
-    Data_Nasc: Optional[date] = None
+    # ALTERADO: str em vez de date para evitar erros de validação
+    Data_Nasc: Optional[str] = None 
     Telefone: Optional[str] = None
     Morada: Optional[str] = None
 
@@ -39,13 +46,14 @@ class AlunoCreate(AlunoBase):
 class AlunoCreateFull(BaseModel):
     # Dados Aluno
     Nome: str = Field(..., min_length=1, description="Nome não pode estar vazio")
-    Data_Nasc: date
+    # ALTERADO: str em vez de date
+    Data_Nasc: str 
     Genero: str
     Telefone: Optional[str] = None
     Ano: int
     Turma_Letra: str
     
-    # Dados EE - AGORA COM VALIDAÇÃO DE TAMANHO MÍNIMO
+    # Dados EE
     EE_Nome: str = Field(..., min_length=1, description="Nome do EE obrigatório")
     EE_Telefone: str = Field(..., min_length=9, description="Telefone inválido")
     EE_Email: str = Field(..., min_length=3, description="Email obrigatório")
@@ -62,24 +70,28 @@ class AlunoDisplay(AlunoBase):
 class AlunoListagem(BaseModel):
     Aluno_id: int
     Nome: str
-    Data_Nasc: Optional[date] = None
+    # ALTERADO: str em vez de date
+    Data_Nasc: Optional[str] = None 
     Genero: Optional[str] = None
     Turma_Desc: str
-    Turma_Ano: Optional[int] = None    # Para edição
-    Turma_Letra: Optional[str] = None  # Para edição
+    Turma_Ano: Optional[int] = None    
+    Turma_Letra: Optional[str] = None  
     Telefone: Optional[str] = None
     
-    # Dados EE (Na listagem podem vir vazios se a base de dados tiver registos antigos)
+    # Dados EE
     EE_Nome: str
     EE_Telefone: Optional[str] = None
     EE_Email: Optional[str] = None
     EE_Morada: Optional[str] = None
     EE_Relacao: Optional[str] = None
-
+    
+    class Config:
+        from_attributes = True
 
 class AlunoUpdate(BaseModel):
     Nome: Optional[str] = None
-    Data_Nasc: Optional[date] = None
+    # ALTERADO: str em vez de date
+    Data_Nasc: Optional[str] = None 
     Telefone: Optional[str] = None
     Genero: Optional[str] = None
     
@@ -122,6 +134,7 @@ class NotaUpdate(BaseModel):
     Nota_3P: Optional[int] = None
     Nota_Ex: Optional[int] = None
     Nota_Final: Optional[int] = None
+    Ano_letivo: Optional[str] = None # Adicionado para permitir update do ano se necessário
 
 class NotaDisplay(NotaBase):
     Nota_id: int
@@ -169,22 +182,30 @@ class StaffListagem(StaffBase):
     class Config:
         from_attributes = True
 
-# --- Schemas de Leitura de Staff/Professor (ATUALIZADO) ---
-class StaffDisplay(BaseModel):
-    id: int
-    email: EmailStr
-    Nome: str
-    Cargo: Optional[str] = None
-    role: str
-    # Novos campos para o Perfil
-    Telefone: Optional[str] = None
-    Morada: Optional[str] = None
-    Salario: Optional[float] = 0.0
-    Escalao: Optional[str] = None
-    Departamento: Optional[str] = None  # Novo
+# --- SCHEMAS ESPECÍFICOS PARA GESTÃO DE TURMAS ---
 
-    class Config:
-        from_attributes = True
+class NotaTurmaPayload(BaseModel):
+    """
+    Schema usado na grelha de pautas da Turma.
+    Recebe 'p1', 'p2' etc, e os IDs para saber quem atualizar.
+    """
+    aluno_id: int
+    disciplina_id: int
+    p1: Optional[int] = None
+    p2: Optional[int] = None
+    p3: Optional[int] = None
+    exame: Optional[int] = None
+    final: Optional[int] = None
+
+class ProfessorUpdate(BaseModel):
+    disciplina_id: int
+    professor_id: int
+
+class TurmaProfessoresUpdate(BaseModel):
+    professores: List[ProfessorUpdate]
+
+class RegrasTransicao(BaseModel):
+    pass
 
 # --- Schemas de Finanças (Dashboard) ---
 
