@@ -136,3 +136,13 @@ def balanco_anual(ano: int, db: Session = Depends(get_db)):
         "saldo": float((tot_rec or 0) - (tot_desp or 0)),
         "detalhe_investimentos": lista_detalhada
     }
+
+# para as despesas em Finances.tsx
+@router.get("/despesas")
+def listar_despesas():
+    return []
+
+# para os investimentos em Finances.tsx
+@router.get("/investimentos")
+def listar_investimentos():
+    return []
