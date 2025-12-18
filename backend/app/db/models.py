@@ -241,6 +241,8 @@ class Ordenado(Base):
     Data_Pagamento = Column(Date)
     Observacoes = Column(Text)
 
+# --- Ai ---
+
 class AIRecommendation(Base):
     __tablename__ = "AI_Recommendation"
     AI_id = Column(Integer, primary_key=True, index=True)

@@ -8,8 +8,10 @@ import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Students from "./pages/Students";
 import Staff from "./pages/Staff";
+import ConsultasPage from "./pages/Consultas";
 import Finances from "./pages/Finances";
 import ClassesPage from "./pages/Classes";
+import ConfiguracoesPage from "./pages/Configuracoes";
 import Recommendations from "./pages/Recommendations";
 import Chat from "./pages/Chat";
 import NotFound from "./pages/NotFound";
@@ -26,15 +28,19 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
+          
           <Route element={<Layout />}>
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/students" element={<ProtectedRoute><Students /></ProtectedRoute>} />
             <Route path="/staff" element={<ProtectedRoute><Staff /></ProtectedRoute>} />
-            <Route path="/classes" element={<ClassesPage />} />
+            <Route path="/classes" element={<ProtectedRoute><ClassesPage /></ProtectedRoute>} />
+            <Route path="/consultas" element={<ProtectedRoute><ConsultasPage /></ProtectedRoute>} /> 
             <Route path="/finances" element={<ProtectedRoute requireAdmin><Finances /></ProtectedRoute>} />
             <Route path="/recommendations" element={<ProtectedRoute requireAdmin><Recommendations /></ProtectedRoute>} />
             <Route path="/chat" element={<ProtectedRoute requireAdmin><Chat /></ProtectedRoute>} />
+            <Route path="/configuracoes" element={<ConfiguracoesPage />} />
           </Route>
+          
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

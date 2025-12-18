@@ -14,13 +14,15 @@ import {
   TrendingUp, 
   Wallet, 
   Loader2, 
-  AlertCircle 
+  AlertCircle,
+  Pencil, // CORREÇÃO: Adicionado o import do Pencil para resolver o erro
+  Trash2
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 
 // Definição dos Tipos (Igual ao Schema do Python)
 interface Investimento {
@@ -51,10 +53,10 @@ interface Despesa {
 }
 
 interface InvestimentoHistorico {
-  id: number;
-  tipo_investimento: string;
-  ano_financiamento: number;
-  valor_aprovado: number;
+  Fin_id: number;
+  Tipo: string;
+  Ano: number;
+  Valor: number;
 }
 
 const Finances = () => {
@@ -76,39 +78,39 @@ const Finances = () => {
   const [anoInvestimento, setAnoInvestimento] = useState<number | "">("");
   const [valorInvestimento, setValorInvestimento] = useState<number | "">("");
 
+  // Para saber se estamos a editar uma despesa ou investimento
+  const [editDespesaId, setEditDespesaId] = useState<number | null>(null);
+  const [editInvestimentoId, setEditInvestimentoId] = useState<number | null>(null);
+
   // Por defeito vamos buscar o ano atual
   const anoAtual = new Date().getFullYear();
 
-  // carregar dados do backend
+  // Função centralizada para carregar dados do backend
+  const fetchFinances = async () => {
+    try {
+      // Nota: O endpoint está em /financas no main.py
+      const response = await fetch(`http://127.0.0.1:8000/financas/balanco/anual?ano=${anoAtual}`);
+      if (!response.ok) throw new Error("Falha ao carregar dados financeiros.");
+      const result = await response.json();
+      setData(result);
+
+      // Buscar histórico de despesas
+      const histResponse = await fetch(`http://127.0.0.1:8000/financas/despesas`);
+      if (histResponse.ok) setHistorico(await histResponse.json());
+
+      // Histórico de investimentos
+      const histInvestRes = await fetch(`http://127.0.0.1:8000/financas/investimentos`);
+      if (histInvestRes.ok) setHistoricoInvestimentos(await histInvestRes.json());
+
+    } catch (err) {
+      console.error(err);
+      setError("Não foi possível conectar ao servidor financeiro.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchFinances = async () => {
-      try {
-        // Nota: O endpoint está em /financas no main.py
-        const response = await fetch(`http://127.0.0.1:8000/financas/balanco/anual?ano=${anoAtual}`);
-        if (!response.ok) throw new Error("Falha ao carregar dados financeiros.");
-        const result = await response.json();
-        setData(result);
-
-        // Buscar histórico de despesas
-        const histResponse = await fetch(`http://127.0.0.1:8000/financas/despesas`);
-        if (!histResponse.ok) throw new Error("Falha ao carregar histórico de despesas.");
-        const histData = await histResponse.json();
-        setHistorico(histData);
-
-        // Histórico de investimentos
-        const histInvestRes = await fetch(`http://127.0.0.1:8000/financas/investimentos`);
-        if (!histInvestRes.ok) throw new Error("Falha ao carregar histórico de investimentos.");
-        const histInvestData = await histInvestRes.json();
-        setHistoricoInvestimentos(histInvestData);
-
-      } catch (err) {
-        console.error(err);
-        setError("Não foi possível conectar ao servidor financeiro.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchFinances();
   }, [anoAtual]);
 
@@ -120,104 +122,75 @@ const Finances = () => {
     }).format(value);
   };
 
-  // --- Adicionar despesa ---
+  // --- Adicionar despesa (LIGADO À API) ---
   const handleAddDespesa = async () => {
-    if (!descricao.trim()) {
-      alert("A descrição é obrigatória.");
+    if (!descricao.trim() || valor === "" || valor <= 0 || investimentoId === "") {
+      alert("Preencha todos os campos obrigatórios.");
       return;
     }
 
-    if (valor === "" || valor <= 0) {
-      alert("O valor da despesa deve ser superior a 0€.");
-      return;
+    try {
+      const method = editDespesaId ? "PUT" : "POST";
+      const url = editDespesaId 
+        ? `http://127.0.0.1:8000/financas/despesas/${editDespesaId}` 
+        : "http://127.0.0.1:8000/financas/despesas";
+
+      const response = await fetch(url, {
+        method: method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          descricao: descricao.trim(),
+          valor: Number(valor),
+          investimento_id: Number(investimentoId)
+        })
+      });
+
+      if (response.ok) {
+        setDescricao(""); setValor(""); setInvestimentoId(""); setEditDespesaId(null);
+        setOpenDespesaModal(false);
+        fetchFinances(); // Recarrega os dados reais e atualiza os saldos
+      }
+    } catch (e) {
+      alert("Erro ao comunicar com o servidor.");
     }
-
-    if (investimentoId === "") {
-      alert("Selecione um investimento.");
-      return;
-    }
-
-    const investimentoSelecionado = data?.detalhe_investimentos.find(
-      inv => inv.id === Number(investimentoId)
-    );
-
-    if (!investimentoSelecionado) {
-      alert("Investimento selecionado inválido.");
-      return;
-    }
-
-    // criar despesa temporária
-    const novaDespesa: Despesa = {
-      id: editDespesaId ?? Date.now(), // mantém id se estiver a editar
-      descricao: descricao.trim(),
-      valor: Number(valor),
-      investimento_id: Number(investimentoId),
-      investimento_nome: data?.detalhe_investimentos.find(inv => inv.id === Number(investimentoId))?.tipo_investimento || ""
-    };
-
-    if (editDespesaId) {
-      // atualizar despesa existente
-      setHistorico(prev =>
-        prev.map(d => (d.id === editDespesaId ? novaDespesa : d))
-      );
-    } else {
-      // adicionar nova despesa
-      setHistorico(prev => [...prev, novaDespesa]);
-    }
-
-    //limpar form
-    setDescricao("");
-    setValor("");
-    setInvestimentoId("");
-    setOpenDespesaModal(false);
   };
   
-  // Adicionar Investimento
+  // Adicionar Investimento (LIGADO À API)
   const handleAddInvestimento = async () => {
     if (!tipoInvestimento || !anoInvestimento || !valorInvestimento) {
       alert("Preencha todos os campos do investimento!");
       return;
     }
 
-    if (anoInvestimento < 1900 || anoInvestimento > 2100) {
-      alert("O ano de financiamento deve estar entre 1900 e 2100.");
-      return;
+    try {
+      const response = await fetch("http://127.0.0.1:8000/financas/investimentos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          Tipo: tipoInvestimento,
+          Valor: Number(valorInvestimento),
+          Ano: Number(anoInvestimento)
+        })
+      });
+
+      if (response.ok) {
+        setOpenInvestimentoModal(false);
+        setTipoInvestimento(""); setAnoInvestimento(""); setValorInvestimento(""); setEditInvestimentoId(null);
+        fetchFinances();
+      }
+    } catch (e) {
+      alert("Erro ao gravar investimento.");
     }
-
-    if (valorInvestimento <= 0) {
-      alert("O valor do investimento deve ser superior a 0€.");
-      return;
-    }
-    
-
-    const novoInvestimento: InvestimentoHistorico = {
-      id: editInvestimentoId ?? Date.now(),
-      tipo_investimento: tipoInvestimento,
-      ano_financiamento: Number(anoInvestimento),
-      valor_aprovado: Number(valorInvestimento)
-    };
-
-    if (editInvestimentoId) {
-      setHistoricoInvestimentos(prev =>
-        prev.map(inv => (inv.id === editInvestimentoId ? novoInvestimento : inv))
-      );
-    } else {
-      setHistoricoInvestimentos(prev => [...prev, novoInvestimento]);
-    }
-
-    // Aqui será chamada a API para POST
-    setOpenInvestimentoModal(false);
-    setTipoInvestimento("");
-    setAnoInvestimento("");
-    setValorInvestimento("");
   };
 
+  const handleDeleteDespesa = async (id: number) => {
+    if (!confirm("Deseja eliminar esta despesa permanentemente?")) return;
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/financas/despesas/${id}`, { method: 'DELETE' });
+      if (res.ok) fetchFinances();
+    } catch (e) { alert("Erro ao eliminar."); }
+  };
 
-  // Para saber se estamos a editar uma despesa ou investimento
-  const [editDespesaId, setEditDespesaId] = useState<number | null>(null);
-  const [editInvestimentoId, setEditInvestimentoId] = useState<number | null>(null);
-
-  // Abrir modal de edição de despesa
   const handleEditDespesa = (despesa: Despesa) => {
     setDescricao(despesa.descricao);
     setValor(despesa.valor);
@@ -226,15 +199,13 @@ const Finances = () => {
     setOpenDespesaModal(true);
   };
 
-  // Abrir modal de edição de investimento
   const handleEditInvestimento = (inv: InvestimentoHistorico) => {
-    setTipoInvestimento(inv.tipo_investimento);
-    setAnoInvestimento(inv.ano_financiamento);
-    setValorInvestimento(inv.valor_aprovado);
-    setEditInvestimentoId(inv.id);
+    setTipoInvestimento(inv.Tipo);
+    setAnoInvestimento(inv.Ano);
+    setValorInvestimento(inv.Valor);
+    setEditInvestimentoId(inv.Fin_id);
     setOpenInvestimentoModal(true);
   };
-
 
   if (loading) {
     return (
@@ -260,7 +231,7 @@ const Finances = () => {
   return (
     <div className="space-y-6 fade-in p-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold tracking-tight">Gestão Financeira {anoAtual}</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Gestão Financeira</h1>
       </div>
 
       {/* Cartões de Resumo */}
@@ -308,21 +279,28 @@ const Finances = () => {
           onClick={() => {
             setDescricao("");
             setValor("");
-            setInvestimentoId(""); // ← MUITO IMPORTANTE
+            setInvestimentoId(""); 
+            setEditDespesaId(null);
             setOpenDespesaModal(true);
           }}>
           
           + Adicionar Despesa
         </Button>
 
-        <Button onClick={() => setOpenInvestimentoModal(true)}>
+        <Button onClick={() => {
+            setTipoInvestimento("");
+            setAnoInvestimento("");
+            setValorInvestimento("");
+            setEditInvestimentoId(null);
+            setOpenInvestimentoModal(true);
+        }}>
           + Adicionar Investimento
         </Button>
 
         <Dialog open={openDespesaModal} onOpenChange={setOpenDespesaModal}>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Adicionar Despesa</DialogTitle>
+              <DialogTitle>{editDespesaId ? "Editar Despesa" : "Adicionar Despesa"}</DialogTitle>
             </DialogHeader>
 
             <div className="space-y-4">
@@ -338,10 +316,7 @@ const Finances = () => {
                 value={valor}
                 onChange={(e) => {
                   const value = e.target.value;
-
-                    // aceita apenas números e decimais
                     if (!/^\d*([.,]\d{0,2})?$/.test(value)) return;
-
                     const num = Number(value.replace(",", "."));
                     if (num >= 0 || value === "") {
                       setValor(value === "" ? "" : num);
@@ -350,7 +325,7 @@ const Finances = () => {
               />
 
               <Select
-                key={investimentoId}   // FIX
+                key={investimentoId}
                 value={investimentoId}
                 onValueChange={(value) => setInvestimentoId(value)}
               >
@@ -377,24 +352,19 @@ const Finances = () => {
 
                 <Button
                   onClick={handleAddDespesa}
-                  disabled={!descricao.trim() ||
-                    valor === "" ||
-                    valor <= 0 ||
-                    !investimentoId
-                  }
+                  disabled={!descricao.trim() || valor === "" || valor <= 0 || !investimentoId}
                 >
-                  Guardar Despesa
+                  {editDespesaId ? "Guardar Alterações" : "Guardar Despesa"}
                 </Button>
               </div>
             </div>
           </DialogContent>
         </Dialog>
 
-        {/* adicionar investimentos */}
         <Dialog open={openInvestimentoModal} onOpenChange={setOpenInvestimentoModal}>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Adicionar Investimento</DialogTitle>
+              <DialogTitle>Adicionar Financiamento</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <Input
@@ -409,9 +379,7 @@ const Finances = () => {
                 value={anoInvestimento}
                 onChange={(e) => {
                   const value = e.target.value;
-                  // só aceita números
                   if (!/^\d*$/.test(value)) return;
-
                   const num = Number(value);
                   if (num >= 0 || value === "") {
                     setAnoInvestimento(value === "" ? "" : num);
@@ -422,14 +390,10 @@ const Finances = () => {
                 type="text"
                 inputMode="decimal"
                 placeholder="Valor aprovado (€)"
-                min={0}
-                step="0.01"
                 value={valorInvestimento}
                 onChange={(e) => {
                   const value = e.target.value;
-                  // aceita números e decimal
                   if (!/^\d*([.,]\d{0,2})?$/.test(value)) return;
-
                   const num = Number(value.replace(",", "."));
                   if (num >= 0 || value === "") {
                     setValorInvestimento(value === "" ? "" : num);
@@ -438,17 +402,14 @@ const Finances = () => {
               />
 
               <div className="flex justify-end gap-2 pt-4">
+                <Button variant="outline" onClick={() => setOpenInvestimentoModal(false)}>
+                  Cancelar
+                </Button>
                 <Button
                   onClick={handleAddInvestimento}
-                  disabled={
-                    !tipoInvestimento ||
-                    !anoInvestimento ||
-                    anoInvestimento <= 0 ||
-                    !valorInvestimento ||
-                    valorInvestimento <= 0
-                  }
+                  disabled={!tipoInvestimento || !anoInvestimento || !valorInvestimento}
                 >
-                  Guardar Investimento
+                  Confirmar
                 </Button>
               </div>
             </div>
@@ -502,14 +463,12 @@ const Finances = () => {
         </CardContent>
       </Card>
       
-      {/* Históricos lado a lado */}
+      {/* Históricos */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-        {/* Histórico de despesas */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-primary" />
+            <CardTitle className="text-md flex items-center gap-2">
+              <TrendingDown className="h-4 w-4 text-red-500" />
               Histórico de Despesas
             </CardTitle>
           </CardHeader>
@@ -518,27 +477,30 @@ const Finances = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Descrição</TableHead>
-                  <TableHead>Valor (€)</TableHead>
+                  <TableHead>Valor</TableHead>
                   <TableHead>Investimento</TableHead>
-                  <TableHead>Ações</TableHead>
+                  <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {historico.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center text-muted-foreground py-4">
-                      Não existem despesas registadas.
+                    <TableCell colSpan={4} className="text-center text-muted-foreground py-4">
+                      Vazio
                     </TableCell>
                   </TableRow>
                 ) : (
                   historico.map(d => (
                     <TableRow key={d.id}>
-                      <TableCell>{d.descricao}</TableCell>
-                      <TableCell>{formatMoney(d.valor)}</TableCell>
-                      <TableCell>{d.investimento_nome}</TableCell>
-                      <TableCell>
-                        <Button variant="outline" size="sm" onClick={() => handleEditDespesa(d)}>
-                          Editar
+                      <TableCell className="text-xs">{d.descricao}</TableCell>
+                      <TableCell className="font-semibold">{formatMoney(d.valor)}</TableCell>
+                      <TableCell className="text-xs">{d.investimento_nome}</TableCell>
+                      <TableCell className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => handleEditDespesa(d)}>
+                          <Pencil size={14}/>
+                        </Button>
+                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteDespesa(d.id)}>
+                          <Trash2 size={14}/>
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -549,40 +511,39 @@ const Finances = () => {
           </CardContent>
         </Card>
         
-        {/* Histórico de investimentos */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-primary" />
-              Histórico de Investimentos
+            <CardTitle className="text-md flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-green-500" />
+              Histórico de Financiamentos
             </CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Investimento</TableHead>
-                  <TableHead>Ano Financiamento</TableHead>
-                  <TableHead>Valor (€)</TableHead>
-                  <TableHead>Ações</TableHead>
+                  <TableHead>Fonte</TableHead>
+                  <TableHead>Ano</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                  <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {historicoInvestimentos.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center text-muted-foreground py-4">
-                      Não existem investimentos registados.
+                      Vazio
                     </TableCell>
                   </TableRow>
                 ) : (
                   historicoInvestimentos.map(inv => (
-                    <TableRow key={inv.id}>
-                      <TableCell>{inv.tipo_investimento}</TableCell>
-                      <TableCell>{inv.ano_financiamento}</TableCell>
-                      <TableCell>{formatMoney(inv.valor_aprovado)}</TableCell>
+                    <TableRow key={inv.Fin_id}>
+                      <TableCell className="text-xs font-medium">{inv.Tipo}</TableCell>
+                      <TableCell className="text-xs">{inv.Ano}</TableCell>
+                      <TableCell className="text-right font-bold">{formatMoney(inv.Valor)}</TableCell>
                       <TableCell>
-                        <Button variant="outline" size="sm" onClick={() => handleEditInvestimento(inv)}>
-                          Editar
+                        <Button variant="ghost" size="icon" onClick={() => handleEditInvestimento(inv)}>
+                          <Pencil size={14}/>
                         </Button>
                       </TableCell>
                     </TableRow>

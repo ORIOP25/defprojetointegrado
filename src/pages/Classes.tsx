@@ -8,13 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Users, BookOpen, GraduationCap, School, CalendarDays, Edit, Plus, Trash2, Save, X, Loader2, Sparkles, Download } from "lucide-react";
+import { useToast } from "@/hooks/use-toast"; // Importado o hook de notificações
 
 // --- TYPES ATUALIZADOS ---
 interface TurmaBasic { id: number; nome: string; ano_letivo: string; }
 interface ProfessorDisc { disciplina_id: number; disciplina: string; professor: string; professor_id: number; }
 interface Aluno { id: number; nome: string; }
 
-// ADICIONADO CAMPO EXAME AQUI
 interface Nota { 
     aluno_id: number; 
     aluno_nome: string; 
@@ -23,7 +23,7 @@ interface Nota {
     p1: number; 
     p2: number; 
     p3: number; 
-    exame: number; // <--- NOVO
+    exame: number; 
     final: number; 
 }
 
@@ -32,6 +32,7 @@ interface DisciplinaOption { Disc_id: number; Nome: string; Categoria: string; }
 interface StaffOption { id: number; Nome: string; Departamento: string; }
 
 const ClassesPage = () => {
+  const { toast } = useToast();
   const [turmasList, setTurmasList] = useState<TurmaBasic[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedYear, setSelectedYear] = useState<string>("");
@@ -92,22 +93,33 @@ const ClassesPage = () => {
       window.open(`http://127.0.0.1:8000/turmas/${selectedTurmaId}/export`, "_blank");
   };
 
-  // GLOBAL TRANSITION
+  // GLOBAL TRANSITION ATUALIZADO
   const handleGlobalTransition = async () => {
     setIsProcessingGlobal(true);
     try {
         const res = await api.post("/turmas/transitar-global", {}); 
         setIsGlobalTransitionOpen(false);
-        alert(`Sucesso!\nNovo Ano: ${res.data.novo_ano}\n\nResumo:\nTransitados: ${res.data.detalhes.transitados}\nRetidos: ${res.data.detalhes.retidos}\nTurmas Criadas: ${res.data.detalhes.turmas_criadas}`);
-        window.location.reload();
+        
+        toast({
+            title: "Sucesso!",
+            description: `Transição concluída. Novo Ano: ${res.data.novo_ano}. Transitados: ${res.data.detalhes.transitados}`,
+        });
+
+        setTimeout(() => window.location.reload(), 2000);
     } catch (error: any) {
-        alert("Erro: " + (error.response?.data?.detail || "Falha na transição"));
+        // Captura a mensagem de erro do backend (ex: notas em falta)
+        const errorMessage = error.response?.data?.detail || "Falha na transição de ano.";
+        toast({
+            variant: "destructive",
+            title: "Transição Bloqueada",
+            description: errorMessage,
+        });
     } finally {
         setIsProcessingGlobal(false);
     }
   };
 
-  // --- GRADES LOGIC (COM EXAME) ---
+  // --- GRADES LOGIC ---
   const viewGrades = useMemo(() => details?.notas.filter(n => n.disciplina_id.toString() === selectedDiscForGrades) || [], [details, selectedDiscForGrades]);
   
   const startEditingGrades = () => { setTempGrades(JSON.parse(JSON.stringify(viewGrades))); setIsEditingGrades(true); };
@@ -126,14 +138,16 @@ const ClassesPage = () => {
             aluno_id: n.aluno_id, 
             disciplina_id: parseInt(selectedDiscForGrades), 
             p1: n.p1, p2: n.p2, p3: n.p3, 
-            exame: n.exame, // <--- ENVIA O EXAME
+            exame: n.exame,
             final: n.final 
         }));
         await Promise.all(promises); 
-        alert("Pauta guardada!"); 
+        toast({ title: "Sucesso", description: "Pauta guardada corretamente." });
         setIsEditingGrades(false); 
         loadDetails(); 
-    } catch (e) { alert("Erro ao guardar notas."); } finally { setIsSavingGrades(false); }
+    } catch (e) { 
+        toast({ variant: "destructive", title: "Erro", description: "Erro ao guardar notas." });
+    } finally { setIsSavingGrades(false); }
   };
 
   // --- PROFS LOGIC ---
@@ -151,8 +165,18 @@ const ClassesPage = () => {
     setEditedProfs(l);
   };
   const handleSaveProfs = async () => {
-    if (editedProfs.some(p => p.disciplina_id === 0 || p.professor_id === 0)) { alert("Preencha tudo."); return; }
-    try { await api.put(`/turmas/${selectedTurmaId}/professores`, { professores: editedProfs.map(p => ({ disciplina_id: p.disciplina_id, professor_id: p.professor_id })) }); alert("Guardado!"); setIsEditingProfs(false); loadDetails(); } catch (e) { alert("Erro."); }
+    if (editedProfs.some(p => p.disciplina_id === 0 || p.professor_id === 0)) { 
+        toast({ variant: "destructive", title: "Aviso", description: "Por favor, preencha todos os campos." });
+        return; 
+    }
+    try { 
+        await api.put(`/turmas/${selectedTurmaId}/professores`, { professores: editedProfs.map(p => ({ disciplina_id: p.disciplina_id, professor_id: p.professor_id })) }); 
+        toast({ title: "Sucesso", description: "Equipa docente atualizada." });
+        setIsEditingProfs(false); 
+        loadDetails(); 
+    } catch (e) { 
+        toast({ variant: "destructive", title: "Erro", description: "Erro ao atualizar professores." });
+    }
   };
   
   const getEligibleProfessors = (dId: number) => { const d = allDisciplinas.find(x => x.Disc_id === dId); return d ? allProfessores.filter(p => p.Departamento?.toLowerCase().includes(d.Categoria.toLowerCase())) : []; };
@@ -177,7 +201,10 @@ const ClassesPage = () => {
             <DialogTrigger asChild><Button className="bg-primary hover:bg-primary/90 text-white gap-2 shadow-sm"><Sparkles size={18} /> Novo Ano Letivo</Button></DialogTrigger>
             <DialogContent className="max-w-md">
                 <DialogHeader><DialogTitle>Abertura Automática</DialogTitle><DialogDescription>O sistema analisará todas as notas e criará turmas para o próximo ano.</DialogDescription></DialogHeader>
-                <div className="py-4 space-y-3 text-sm"><p>Regras: 3+ negativas reprova (5-8º); 2+ (9º); Exames contam.</p></div>
+                <div className="py-4 space-y-3 text-sm">
+                    <p className="font-semibold text-amber-600 italic">Atenção: Todos os alunos devem ter notas finais lançadas para processar a transição.</p>
+                    <p>Regras: 3+ negativas reprova (5-8º); 2+ (9º); Exames contam.</p>
+                </div>
                 <DialogFooter><Button variant="outline" onClick={() => setIsGlobalTransitionOpen(false)}>Cancelar</Button><Button onClick={handleGlobalTransition} disabled={isProcessingGlobal}>{isProcessingGlobal ? <Loader2 className="animate-spin"/> : "Processar"}</Button></DialogFooter>
             </DialogContent>
         </Dialog>
@@ -244,14 +271,12 @@ const ClassesPage = () => {
                 </CardHeader>
                 <CardContent>
                   <Table>
-                    {/* CABEÇALHO ATUALIZADO COM EXAME */}
                     <TableHeader><TableRow><TableHead>Aluno</TableHead><TableHead className="text-center w-20">1º P</TableHead><TableHead className="text-center w-20">2º P</TableHead><TableHead className="text-center w-20">3º P</TableHead><TableHead className="text-center w-20 bg-blue-50/50 text-blue-800">Exame</TableHead><TableHead className="text-center w-20">Final</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {activeGradesList.length === 0 ? (<TableRow><TableCell colSpan={6} className="text-center h-24 text-muted-foreground">Sem dados.</TableCell></TableRow>) : (
                         activeGradesList.map((n) => (
                           <TableRow key={n.aluno_id}>
                             <TableCell className="font-medium">{n.aluno_nome}</TableCell>
-                            {/* COLUNAS: P1, P2, P3, EXAME, FINAL */}
                             {['p1', 'p2', 'p3', 'exame', 'final'].map((field) => {
                                 const val = n[field as keyof Nota] as number;
                                 const isFinal = field === 'final';
@@ -263,7 +288,6 @@ const ClassesPage = () => {
                                             <Input className={`h-8 text-center ${isFinal ? 'font-bold border-primary' : ''} ${isExam ? 'border-blue-300' : ''}`} type="number" min="0" max="20" value={val || 0} onChange={(e) => handleTempGradeChange(n.aluno_id, field as keyof Nota, e.target.value)} />
                                         ) : (
                                             <span className={`${isFinal ? (n.final >= 10 ? "text-green-600 font-bold" : "text-red-500 font-bold") : ""} ${isExam && val > 0 ? "text-blue-700 font-medium" : "text-muted-foreground"}`}>
-                                                {/* Se for exame e for 0, mostra um traço suave para não poluir */}
                                                 {isExam && val === 0 ? "-" : (val > 0 ? val : "-")}
                                             </span>
                                         )}

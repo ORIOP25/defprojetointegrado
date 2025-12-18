@@ -1,6 +1,7 @@
 from typing import List, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import and_, or_, desc
 from app.db.database import get_db
 from app.db import models
 from app.db import schemas 
@@ -153,13 +154,41 @@ def get_disciplina_id_por_nome(db: Session, termo: str) -> Optional[int]:
 def transitar_ano_global(regras: schemas.RegrasTransicao, db: Session = Depends(get_db)): 
     """
     Transição Global com:
-    1. Regras de Ensino PT
-    2. Criação de Matrículas (Histórico)
+    1. Bloqueio por falta de notas (NOVO)
+    2. Regras de Ensino PT
+    3. Criação de Matrículas (Histórico)
     """
+    # 1. Identificar o ano letivo atual
     ultima_turma = db.query(models.Turma).order_by(models.Turma.Turma_id.desc()).first()
     if not ultima_turma: raise HTTPException(400, "Sem turmas.")
     
     ano_atual_str = ultima_turma.AnoLetivo
+
+    # 2. VERIFICAÇÃO: Existem notas em falta?
+    # Procuramos por qualquer aluno matriculado que não tenha nota final numa das disciplinas da sua turma
+    notas_em_falta = db.query(models.Matricula).join(models.Turma).join(
+        models.TurmaDisciplina, models.Turma.Turma_id == models.TurmaDisciplina.Turma_id
+    ).outerjoin(
+        models.Nota, and_(
+            models.Nota.Aluno_id == models.Matricula.Aluno_id,
+            models.Nota.Disc_id == models.TurmaDisciplina.Disc_id,
+            models.Nota.Ano_letivo == models.Turma.AnoLetivo
+        )
+    ).filter(
+        models.Turma.AnoLetivo == ano_atual_str,
+        or_(
+            models.Nota.Nota_id == None,       # Não existe registo de nota para o par aluno/disciplina
+            models.Nota.Nota_Final == None      # O registo existe mas a nota final está vazia
+        )
+    ).first()
+
+    if notas_em_falta:
+        raise HTTPException(
+            status_code=400, 
+            detail="Não é possível avançar: existem alunos com notas por lançar neste ano letivo."
+        )
+
+    # 3. Preparar novo ano letivo
     partes = ano_atual_str.split("/")
     novo_ano_letivo = f"{int(partes[0])+1}/{int(partes[1])+1}"
     

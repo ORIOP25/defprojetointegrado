@@ -31,7 +31,6 @@ interface AlunoListagem {
   Turma_Ano: number;
   Turma_Letra: string;
   Telefone: string;
-  // Dados EE Completos
   EE_Nome: string;
   EE_Telefone?: string;
   EE_Email?: string;
@@ -73,6 +72,7 @@ interface Turma {
     Turma_id: number;
     Ano: number;
     Turma: string;
+    AnoLetivo?: string;
 }
 
 const Students = () => {
@@ -82,24 +82,20 @@ const Students = () => {
   const [turmas, setTurmas] = useState<Turma[]>([]); 
   const [loading, setLoading] = useState(true);
   
-  // PAGINAÇÃO E FILTROS
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
   const [filtroTurma, setFiltroTurma] = useState<string>("Todas");
-  const [filtroAnoLetivo, setFiltroAnoLetivo] = useState<string>(""); // Estado Novo: Ano Letivo Global
-  const [anosLetivosDisponiveis, setAnosLetivosDisponiveis] = useState<string[]>([]); // Lista para dropdown
+  const [filtroAnoLetivo, setFiltroAnoLetivo] = useState<string>(""); 
+  const [anosLetivosDisponiveis, setAnosLetivosDisponiveis] = useState<string[]>([]); 
   const [sortBy, setSortBy] = useState<"id" | "name">("id");
   const limit = 100;
 
-  // --- ESTADOS DO PERFIL E EDIÇÃO DE ALUNO ---
   const [selectedStudent, setSelectedStudent] = useState<AlunoListagem | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editProfileData, setEditProfileData] = useState<(AlunoListagem & { Turma_id?: string }) | null>(null);
   const [deleteAlertOpen, setDeleteAlertOpen] = useState(false);
 
-  // --- ESTADOS DAS NOTAS ---
   const [notas, setNotas] = useState<Nota[]>([]);
   const [loadingNotas, setLoadingNotas] = useState(false);
   const [anoLetivoNotaFiltro, setAnoLetivoNotaFiltro] = useState<string>("Todos");
@@ -108,37 +104,27 @@ const Students = () => {
   const [isNotaDialogOpen, setIsNotaDialogOpen] = useState(false);
   const [isEditingNota, setIsEditingNota] = useState(false);
   const [notaForm, setNotaForm] = useState({
-    Nota_id: 0,
-    Disc_id: "", 
-    Nota_1P: "", Nota_2P: "", Nota_3P: "", Nota_Ex: "", Nota_Final: "",
+    Nota_id: 0, Disc_id: "", Nota_1P: "", Nota_2P: "", Nota_3P: "", Nota_Ex: "", Nota_Final: "",
     Ano_letivo: "2024/2025"
   });
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  
   const [formData, setFormData] = useState<AlunoForm>({
-      Nome: "", Data_Nasc: "", Telefone: "", Genero: "M",
-      Turma_id: "", 
+      Nome: "", Data_Nasc: "", Telefone: "", Genero: "M", Turma_id: "", 
       EE_Nome: "", EE_Telefone: "", EE_Email: "", EE_Morada: "", EE_Relacao: ""
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // --- FETCH DADOS ---
   const fetchAnosLetivos = async () => {
       try {
           const response = await fetch("http://127.0.0.1:8000/students/anos-letivos");
           if (response.ok) {
               const data = await response.json();
               setAnosLetivosDisponiveis(data);
-              // Seleciona o ano mais recente por defeito se a lista não estiver vazia
-              if (data.length > 0 && !filtroAnoLetivo) {
-                  setFiltroAnoLetivo(data[0]);
-              }
+              if (data.length > 0 && !filtroAnoLetivo) setFiltroAnoLetivo(data[0]);
           }
-      } catch (error) {
-          console.error("Erro ao buscar anos letivos", error);
-      }
+      } catch (error) { console.error("Erro anos letivos", error); }
   };
 
   const fetchStudents = async () => {
@@ -146,26 +132,13 @@ const Students = () => {
     try {
       const skip = (page - 1) * limit;
       let url = `http://127.0.0.1:8000/students/?skip=${skip}&limit=${limit}&sort_by=${sortBy}`;
-      
-      if (searchTerm) {
-          url += `&search=${encodeURIComponent(searchTerm)}`;
-      }
-      if (filtroTurma && filtroTurma !== "Todas") {
-          url += `&turma_id=${filtroTurma}`;
-      }
-      // NOVO: Enviar o ano letivo selecionado para o backend
-      if (filtroAnoLetivo) {
-          url += `&ano_letivo=${filtroAnoLetivo}`;
-      }
+      if (searchTerm) url += `&search=${encodeURIComponent(searchTerm)}`;
+      if (filtroTurma && filtroTurma !== "Todas") url += `&turma_id=${filtroTurma}`;
+      if (filtroAnoLetivo) url += `&ano_letivo=${filtroAnoLetivo}`;
 
       const response = await fetch(url);
-      if (!response.ok) throw new Error("Erro ao buscar alunos");
       setAlunos(await response.json());
-    } catch (error) {
-      console.error("Erro:", error);
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) { console.error("Erro busca alunos", error); } finally { setLoading(false); }
   };
 
   const fetchDisciplines = async () => {
@@ -175,21 +148,28 @@ const Students = () => {
       } catch (error) { console.error("Erro disciplinas", error); }
   };
 
-  const fetchTurmas = async () => {
+  // MUDANÇA: Agora filtra as turmas pelo ano letivo para evitar duplicados e listas vazias
+  const fetchTurmas = async (ano?: string) => {
       try {
-          const response = await fetch("http://127.0.0.1:8000/students/turmas/list");
+          const url = ano && ano !== "Todos" 
+            ? `http://127.0.0.1:8000/students/turmas/list?ano_letivo=${ano}` 
+            : "http://127.0.0.1:8000/students/turmas/list";
+          const response = await fetch(url);
           if (response.ok) setTurmas(await response.json());
       } catch (error) { console.error("Erro turmas", error); }
   };
 
-  // Init
   useEffect(() => {
       fetchDisciplines();
-      fetchTurmas(); 
-      fetchAnosLetivos(); // Carregar anos letivos ao iniciar
+      fetchAnosLetivos(); 
   }, []);
 
-  // Recarregar quando filtros mudam (incluindo filtroAnoLetivo)
+  // Recarregar turmas quando o ano letivo mudar
+  useEffect(() => {
+      fetchTurmas(filtroAnoLetivo);
+      setFiltroTurma("Todas"); 
+  }, [filtroAnoLetivo]);
+
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => fetchStudents(), 500);
     return () => clearTimeout(delayDebounceFn);
@@ -204,11 +184,7 @@ const Students = () => {
         setNotas(data);
         setAnosDisponiveisNotas(Array.from(new Set(data.map(n => n.Ano_letivo))).sort().reverse());
       }
-    } catch (error) {
-      console.error("Erro ao buscar notas:", error);
-    } finally {
-      setLoadingNotas(false);
-    }
+    } catch (error) { console.error("Erro notas", error); } finally { setLoadingNotas(false); }
   };
 
   const handleOpenProfile = (aluno: AlunoListagem) => {
@@ -219,19 +195,13 @@ const Students = () => {
     fetchGrades(aluno.Aluno_id);
   };
 
-  // --- ACTIONS DE PAGINAÇÃO ---
   const handleNextPage = () => { if (alunos.length === limit) setPage(p => p + 1); };
   const handlePrevPage = () => { if (page > 1) setPage(p => p - 1); };
 
-  // --- IMPORT / EXPORT / TEMPLATE ---
   const handleDownloadTemplate = () => { window.open("http://127.0.0.1:8000/students/data/template", "_blank"); };
   const handleExportData = () => {
       let url = "http://127.0.0.1:8000/students/data/export";
-      
-      if (filtroAnoLetivo && filtroAnoLetivo !== "Todos") {
-          url += `?ano_letivo=${encodeURIComponent(filtroAnoLetivo)}`;
-      }
-      
+      if (filtroAnoLetivo && filtroAnoLetivo !== "Todos") url += `?ano_letivo=${encodeURIComponent(filtroAnoLetivo)}`;
       window.open(url, "_blank");
   };
   const handleImportClick = () => { fileInputRef.current?.click(); };
@@ -239,26 +209,21 @@ const Students = () => {
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       if (!file) return;
-      const formData = new FormData();
-      formData.append("file", file);
+      const formDataUpload = new FormData();
+      formDataUpload.append("file", file);
       try {
           setLoading(true);
-          const response = await fetch("http://127.0.0.1:8000/students/data/import", { method: "POST", body: formData });
-          if (response.ok) {
-              const data = await response.json();
-              alert(data.message);
-              fetchStudents();
-          } else {
-              const err = await response.json();
-              alert("Erro na importação: " + err.detail);
-          }
+          const response = await fetch("http://127.0.0.1:8000/students/data/import", { method: "POST", body: formDataUpload });
+          const data = await response.json();
+          alert(data.message);
+          fetchStudents();
       } catch (error) { alert("Erro ao enviar ficheiro."); } finally {
           setLoading(false);
           if (fileInputRef.current) fileInputRef.current.value = "";
       }
   };
 
-  // --- LÓGICA DE CRIAÇÃO ---
+  // MUDANÇA: Lógica de criação corrigida para evitar erro 422 e garantir matrícula
   const handleCreateSubmit = async () => {
       if (!formData.Turma_id) { alert("Selecione uma turma."); return; }
       if (!formData.EE_Nome) { alert("Dados do EE obrigatórios."); return; }
@@ -266,9 +231,17 @@ const Students = () => {
       const turmaSelecionada = turmas.find(t => t.Turma_id.toString() === formData.Turma_id);
       
       const payload = {
-          ...formData,
-          Ano: turmaSelecionada?.Ano || 10,
-          Turma_Letra: turmaSelecionada?.Turma || "A"
+          Nome: formData.Nome,
+          Data_Nasc: formData.Data_Nasc,
+          Telefone: formData.Telefone || null,
+          Genero: formData.Genero,
+          Ano: Number(turmaSelecionada?.Ano),
+          Turma_Letra: turmaSelecionada?.Turma || "A",
+          EE_Nome: formData.EE_Nome,
+          EE_Telefone: formData.EE_Telefone,
+          EE_Email: formData.EE_Email || null,
+          EE_Morada: formData.EE_Morada || null,
+          EE_Relacao: formData.EE_Relacao || "Pai/Mãe"
       };
 
       try {
@@ -278,19 +251,16 @@ const Students = () => {
         if (response.ok) {
             setCreateDialogOpen(false);
             fetchStudents(); 
+            alert("Aluno matriculado com sucesso.");
             setFormData({ Nome: "", Data_Nasc: "", Telefone: "", Genero: "M", Turma_id: "", EE_Nome: "", EE_Telefone: "", EE_Email: "", EE_Morada: "", EE_Relacao: "" });
-        } else { alert("Erro ao criar aluno."); }
+        } else { alert("Erro ao criar aluno. Verifique os dados."); }
       } catch (error) { console.error(error); }
   };
 
-  // --- LÓGICA DE PERFIL ---
   const handleStartEditingProfile = () => {
     if (selectedStudent) {
         const turmaAtual = turmas.find(t => t.Ano === selectedStudent.Turma_Ano && t.Turma === selectedStudent.Turma_Letra);
-        setEditProfileData({
-            ...selectedStudent,
-            Turma_id: turmaAtual ? turmaAtual.Turma_id.toString() : ""
-        });
+        setEditProfileData({ ...selectedStudent, Turma_id: turmaAtual ? turmaAtual.Turma_id.toString() : "" });
         setIsEditingProfile(true);
     }
   };
@@ -298,26 +268,13 @@ const Students = () => {
   const handleSaveProfile = async () => {
       if (!editProfileData || !selectedStudent) return;
       const turmaSelecionada = turmas.find(t => t.Turma_id.toString() === editProfileData.Turma_id);
-
       try {
           const payload = {
-              Nome: editProfileData.Nome,
-              Telefone: editProfileData.Telefone,
-              Data_Nasc: editProfileData.Data_Nasc,
-              Genero: editProfileData.Genero,
-              Ano: turmaSelecionada?.Ano,
-              Turma_Letra: turmaSelecionada?.Turma,
-              EE_Nome: editProfileData.EE_Nome,
-              EE_Telefone: editProfileData.EE_Telefone,
-              EE_Email: editProfileData.EE_Email,
-              EE_Morada: editProfileData.EE_Morada,
-              EE_Relacao: editProfileData.EE_Relacao
+              Nome: editProfileData.Nome, Telefone: editProfileData.Telefone, Data_Nasc: editProfileData.Data_Nasc, Genero: editProfileData.Genero,
+              Ano: turmaSelecionada?.Ano, Turma_Letra: turmaSelecionada?.Turma,
+              EE_Nome: editProfileData.EE_Nome, EE_Telefone: editProfileData.EE_Telefone, EE_Email: editProfileData.EE_Email, EE_Morada: editProfileData.EE_Morada, EE_Relacao: editProfileData.EE_Relacao
           };
-
-          const response = await fetch(`http://127.0.0.1:8000/students/${selectedStudent.Aluno_id}`, {
-              method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-          });
-
+          const response = await fetch(`http://127.0.0.1:8000/students/${selectedStudent.Aluno_id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
           if (response.ok) {
               const updatedAluno = await response.json();
               setSelectedStudent(updatedAluno);
@@ -333,14 +290,12 @@ const Students = () => {
         const response = await fetch(`http://127.0.0.1:8000/students/${selectedStudent.Aluno_id}`, { method: 'DELETE' });
         if (response.ok) {
             setAlunos(alunos.filter(a => a.Aluno_id !== selectedStudent.Aluno_id));
-            setDeleteAlertOpen(false); 
-            setIsProfileOpen(false);
+            setDeleteAlertOpen(false); setIsProfileOpen(false);
             alert("Aluno eliminado.");
         } else { alert("Erro ao eliminar."); }
     } catch (error) { console.error(error); }
   };
 
-  // --- LÓGICA DE NOTAS ---
   const handleOpenAddNota = () => {
       setIsEditingNota(false);
       setNotaForm({ Nota_id: 0, Disc_id: "", Nota_1P: "", Nota_2P: "", Nota_3P: "", Nota_Ex: "", Nota_Final: "", Ano_letivo: filtroAnoLetivo || "2024/2025" });
@@ -349,16 +304,7 @@ const Students = () => {
 
   const handleOpenEditNota = (nota: Nota) => {
       setIsEditingNota(true);
-      setNotaForm({
-          Nota_id: nota.Nota_id,
-          Disc_id: nota.Disc_id.toString(),
-          Nota_1P: nota.Nota_1P?.toString() || "",
-          Nota_2P: nota.Nota_2P?.toString() || "",
-          Nota_3P: nota.Nota_3P?.toString() || "",
-          Nota_Ex: nota.Nota_Ex?.toString() || "",
-          Nota_Final: nota.Nota_Final?.toString() || "",
-          Ano_letivo: nota.Ano_letivo
-      });
+      setNotaForm({ Nota_id: nota.Nota_id, Disc_id: nota.Disc_id.toString(), Nota_1P: nota.Nota_1P?.toString() || "", Nota_2P: nota.Nota_2P?.toString() || "", Nota_3P: nota.Nota_3P?.toString() || "", Nota_Ex: nota.Nota_Ex?.toString() || "", Nota_Final: nota.Nota_Final?.toString() || "", Ano_letivo: nota.Ano_letivo });
       setIsNotaDialogOpen(true);
   };
 
@@ -374,19 +320,12 @@ const Students = () => {
   const handleSaveNota = async () => {
     if (!selectedStudent) return;
     const payload = {
-        Disc_id: parseInt(notaForm.Disc_id),
-        Nota_1P: notaForm.Nota_1P ? parseInt(notaForm.Nota_1P) : null,
-        Nota_2P: notaForm.Nota_2P ? parseInt(notaForm.Nota_2P) : null,
-        Nota_3P: notaForm.Nota_3P ? parseInt(notaForm.Nota_3P) : null,
-        Nota_Ex: notaForm.Nota_Ex ? parseInt(notaForm.Nota_Ex) : null,
-        Nota_Final: notaForm.Nota_Final ? parseInt(notaForm.Nota_Final) : null,
-        Ano_letivo: notaForm.Ano_letivo
+        Disc_id: parseInt(notaForm.Disc_id), Nota_1P: notaForm.Nota_1P ? parseInt(notaForm.Nota_1P) : null, Nota_2P: notaForm.Nota_2P ? parseInt(notaForm.Nota_2P) : null, Nota_3P: notaForm.Nota_3P ? parseInt(notaForm.Nota_3P) : null,
+        Nota_Ex: notaForm.Nota_Ex ? parseInt(notaForm.Nota_Ex) : null, Nota_Final: notaForm.Nota_Final ? parseInt(notaForm.Nota_Final) : null, Ano_letivo: notaForm.Ano_letivo
     };
-
     try {
         let url = isEditingNota ? `http://127.0.0.1:8000/students/grades/${notaForm.Nota_id}` : `http://127.0.0.1:8000/students/${selectedStudent.Aluno_id}/grades`;
         const method = isEditingNota ? "PUT" : "POST";
-        
         const response = await fetch(url, { method: method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
         if (response.ok) { setIsNotaDialogOpen(false); fetchGrades(selectedStudent.Aluno_id); } 
         else { alert("Erro ao salvar nota."); }
@@ -397,20 +336,13 @@ const Students = () => {
 
   return (
     <div className="space-y-6 fade-in p-6">
-      {/* HEADER */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Gestão de Alunos</h1>
-          <p className="text-muted-foreground">Listagem e gestão de matrículas escolar.</p>
-        </div>
-
-        {/* BOTÕES DE AÇÃO (IMPORT/EXPORT/NOVO) */}
+        <div><h1 className="text-3xl font-bold tracking-tight">Gestão de Alunos</h1><p className="text-muted-foreground">Listagem e gestão de matrículas escolar.</p></div>
         <div className="flex flex-wrap gap-2 w-full xl:w-auto">
             <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".xlsx, .xls" className="hidden" />
             <Button variant="outline" onClick={handleDownloadTemplate} className="gap-2"><FileSpreadsheet size={16} /> Template</Button>
             <Button variant="outline" onClick={handleImportClick} className="gap-2"><Upload size={16} /> Importar</Button>
             <Button variant="outline" onClick={handleExportData} className="gap-2"><Download size={16} /> Exportar</Button>
-
             <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
               <DialogTrigger asChild><Button className="flex gap-2 bg-blue-600 hover:bg-blue-700"><Plus size={18} /> Novo Aluno</Button></DialogTrigger>
               <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -442,141 +374,49 @@ const Students = () => {
         </div>
       </div>
 
-      {/* FILTROS E TABELA */}
       <Card>
         <CardHeader className="pb-2">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <GraduationCap className="h-5 w-5 text-primary" />
-              Listagem Geral
-            </CardTitle>
+            <CardTitle className="text-lg flex items-center gap-2"><GraduationCap className="h-5 w-5 text-primary" />Listagem Geral</CardTitle>
             <div className="flex gap-2 w-full sm:w-auto flex-wrap">
-                
-                {/* FILTRO ANO LETIVO (NOVO) */}
-                <div className="w-[160px]">
-                    <Select value={filtroAnoLetivo} onValueChange={(val) => { setFiltroAnoLetivo(val); setPage(1); }}>
-                        <SelectTrigger className="h-9">
-                            <CalendarDays size={14} className="mr-2 text-muted-foreground"/>
-                            <SelectValue placeholder="Ano Letivo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {anosLetivosDisponiveis.map(ano => (
-                                <SelectItem key={ano} value={ano}>{ano}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-
-                {/* ORDENAÇÃO */}
-                <div className="w-[140px]">
-                    <Select value={sortBy} onValueChange={(val: "id" | "name") => setSortBy(val)}>
-                        <SelectTrigger className="h-9"><ArrowUpDown size={14} className="mr-2 text-muted-foreground"/><SelectValue placeholder="Ordenar" /></SelectTrigger>
-                        <SelectContent><SelectItem value="id">Por ID</SelectItem><SelectItem value="name">Por Nome</SelectItem></SelectContent>
-                    </Select>
-                </div>
-
-                {/* FILTRO DE TURMA */}
-                <div className="w-[160px]">
-                    <Select value={filtroTurma} onValueChange={(val) => { setFiltroTurma(val); setPage(1); }}>
-                        <SelectTrigger className="h-9"><Filter size={14} className="mr-2 text-muted-foreground"/><SelectValue placeholder="Filtrar Turma" /></SelectTrigger>
-                        <SelectContent><SelectItem value="Todas">Todas</SelectItem>{turmas.map(t => (<SelectItem key={t.Turma_id} value={t.Turma_id.toString()}>{t.Ano}º {t.Turma}</SelectItem>))}</SelectContent>
-                    </Select>
-                </div>
-                {/* PESQUISA */}
-                <div className="relative w-64">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input placeholder="Procurar aluno..." className="pl-8 h-9" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }} />
-                </div>
+                <div className="w-[160px]"><Select value={filtroAnoLetivo} onValueChange={(val) => { setFiltroAnoLetivo(val); setPage(1); }}><SelectTrigger className="h-9"><CalendarDays size={14} className="mr-2 text-muted-foreground"/><SelectValue placeholder="Ano Letivo"/></SelectTrigger><SelectContent>{anosLetivosDisponiveis.map(ano => (<SelectItem key={ano} value={ano}>{ano}</SelectItem>))}</SelectContent></Select></div>
+                <div className="w-[140px]"><Select value={sortBy} onValueChange={(val: "id" | "name") => setSortBy(val)}><SelectTrigger className="h-9"><ArrowUpDown size={14} className="mr-2 text-muted-foreground"/><SelectValue placeholder="Ordenar" /></SelectTrigger><SelectContent><SelectItem value="id">Por ID</SelectItem><SelectItem value="name">Por Nome</SelectItem></SelectContent></Select></div>
+                <div className="w-[160px]"><Select value={filtroTurma} onValueChange={(val) => { setFiltroTurma(val); setPage(1); }}><SelectTrigger className="h-9"><Filter size={14} className="mr-2 text-muted-foreground"/><SelectValue placeholder="Filtrar Turma" /></SelectTrigger><SelectContent><SelectItem value="Todas">Todas</SelectItem>{turmas.map(t => (<SelectItem key={t.Turma_id} value={t.Turma_id.toString()}>{t.Ano}º {t.Turma}</SelectItem>))}</SelectContent></Select></div>
+                <div className="relative w-64"><Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" /><Input placeholder="Procurar aluno..." className="pl-8 h-9" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }} /></div>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          {loading ? (
-             <div className="flex justify-center py-10"><Loader2 className="animate-spin" /></div>
-          ) : (
-            <>
-            <Table>
-                <TableHeader><TableRow><TableHead>ID</TableHead><TableHead>Nome</TableHead><TableHead>Turma no Ano</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {alunos.length === 0 ? (
-                      <TableRow><TableCell colSpan={4} className="text-center h-24 text-muted-foreground">Sem resultados encontrados.</TableCell></TableRow>
-                  ) : (
-                      alunos.map((aluno) => (
-                        <TableRow key={aluno.Aluno_id}>
-                          <TableCell>#{aluno.Aluno_id}</TableCell>
-                          <TableCell><div className="font-medium">{aluno.Nome}</div><div className="text-xs text-muted-foreground">{aluno.Data_Nasc}</div></TableCell>
-                          <TableCell><Badge variant="outline">{aluno.Turma_Desc}</Badge></TableCell>
-                          <TableCell className="text-right"><Button variant="ghost" size="sm" onClick={() => handleOpenProfile(aluno)}>Ver Perfil</Button></TableCell>
-                        </TableRow>
-                      ))
-                  )}
-                </TableBody>
+          {loading ? (<div className="flex justify-center py-10"><Loader2 className="animate-spin" /></div>) : (
+            <><Table><TableHeader><TableRow><TableHead>ID</TableHead><TableHead>Nome</TableHead><TableHead>Turma no Ano</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+                <TableBody>{alunos.length === 0 ? (<TableRow><TableCell colSpan={4} className="text-center h-24 text-muted-foreground">Sem resultados encontrados.</TableCell></TableRow>) : (alunos.map((aluno) => (<TableRow key={aluno.Aluno_id}><TableCell>#{aluno.Aluno_id}</TableCell><TableCell><div className="font-medium">{aluno.Nome}</div><div className="text-xs text-muted-foreground">{aluno.Data_Nasc}</div></TableCell><TableCell><Badge variant="outline">{aluno.Turma_Desc}</Badge></TableCell><TableCell className="text-right"><Button variant="ghost" size="sm" onClick={() => handleOpenProfile(aluno)}>Ver Perfil</Button></TableCell></TableRow>)))}</TableBody>
             </Table>
-
-            {/* PAGINAÇÃO */}
-            <div className="flex justify-between items-center mt-4 border-t pt-2">
-                <div className="text-sm text-muted-foreground">Página {page}</div>
-                <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={handlePrevPage} disabled={page === 1}><ChevronLeft size={16} className="mr-1"/> Anterior</Button>
-                    <Button variant="outline" size="sm" onClick={handleNextPage} disabled={alunos.length < limit}>Próximo <ChevronRight size={16} className="ml-1"/></Button>
-                </div>
-            </div>
-            </>
-          )}
+            <div className="flex justify-between items-center mt-4 border-t pt-2"><div className="text-sm text-muted-foreground">Página {page}</div><div className="flex gap-2"><Button variant="outline" size="sm" onClick={handlePrevPage} disabled={page === 1}><ChevronLeft size={16} className="mr-1"/> Anterior</Button><Button variant="outline" size="sm" onClick={handleNextPage} disabled={alunos.length < limit}>Próximo <ChevronRight size={16} className="ml-1"/></Button></div></div></>)}
         </CardContent>
       </Card>
 
-      {/* --- MODAL DE PERFIL --- */}
       <Dialog open={isProfileOpen} onOpenChange={setIsProfileOpen}>
         <DialogContent className="max-w-xl max-h-[95vh] overflow-y-auto"> 
           <DialogHeader><DialogTitle className="flex items-center gap-2 text-xl"><User className="h-6 w-6 text-primary" />{isEditingProfile ? "A Editar Perfil" : "Perfil do Aluno"}</DialogTitle></DialogHeader>
           {selectedStudent && (
             <div className="space-y-6">
               <div className="flex items-center justify-between bg-muted/50 p-4 rounded-lg border">
-                <div className="w-full mr-4">
-                  {isEditingProfile && editProfileData ? (
-                      <Input value={editProfileData.Nome} onChange={(e) => setEditProfileData({...editProfileData, Nome: e.target.value})} className="font-bold text-lg bg-white"/>
-                  ) : (
-                    <>
-                      <h3 className="font-bold text-lg">{selectedStudent.Nome}</h3>
-                      <p className="text-sm text-muted-foreground">ID: #{selectedStudent.Aluno_id}</p>
-                    </>
-                  )}
-                </div>
+                <div className="w-full mr-4">{isEditingProfile && editProfileData ? (<Input value={editProfileData.Nome} onChange={(e) => setEditProfileData({...editProfileData, Nome: e.target.value})} className="font-bold text-lg bg-white"/>) : (<><h3 className="font-bold text-lg">{selectedStudent.Nome}</h3><p className="text-sm text-muted-foreground">ID: #{selectedStudent.Aluno_id}</p></>)}</div>
                 <Badge className="text-base px-3 py-1" variant={selectedStudent.Turma_Desc === "Sem Turma" ? "secondary" : "default"}>{selectedStudent.Turma_Desc}</Badge>
               </div>
-
               <Tabs defaultValue="info" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 mb-6">
-                    <TabsTrigger value="info">Informações</TabsTrigger>
-                    <TabsTrigger value="notas">Notas & Avaliações</TabsTrigger>
-                </TabsList>
-
+                <TabsList className="grid w-full grid-cols-2 mb-6"><TabsTrigger value="info">Informações</TabsTrigger><TabsTrigger value="notas">Notas & Avaliações</TabsTrigger></TabsList>
                 <TabsContent value="info" className="space-y-6">
-                    <div className="space-y-3">
-                        <h4 className="font-semibold border-b pb-2 text-sm text-muted-foreground uppercase tracking-wide">Dados Pessoais</h4>
+                    <div className="space-y-3"><h4 className="font-semibold border-b pb-2 text-sm text-muted-foreground uppercase tracking-wide">Dados Pessoais</h4>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1"><Label className="text-xs font-medium text-muted-foreground">Data de Nascimento</Label>{isEditingProfile && editProfileData ? (<Input type="date" value={editProfileData.Data_Nasc} onChange={e => setEditProfileData({...editProfileData, Data_Nasc: e.target.value})} className="h-8"/>) : (<div className="text-sm">{selectedStudent.Data_Nasc}</div>)}</div>
                             <div className="space-y-1"><Label className="text-xs font-medium text-muted-foreground">Género</Label>{isEditingProfile && editProfileData ? (<Select value={editProfileData.Genero} onValueChange={(val: any) => setEditProfileData({...editProfileData, Genero: val})}><SelectTrigger className="h-8"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="M">Masculino</SelectItem><SelectItem value="F">Feminino</SelectItem></SelectContent></Select>) : (<div className="text-sm">{selectedStudent.Genero === 'M' ? 'Masculino' : 'Feminino'}</div>)}</div>
                         </div>
                     </div>
-
-                    <div className="space-y-3">
-                        <h4 className="font-semibold border-b pb-2 text-sm text-muted-foreground uppercase flex items-center gap-2"><School size={14}/> Dados Escolares</h4>
-                        <div>
-                            {isEditingProfile && editProfileData ? (
-                                <div className="space-y-1"><Label className="text-xs font-medium text-muted-foreground">Turma</Label><Select value={editProfileData.Turma_id || ""} onValueChange={(v) => setEditProfileData({...editProfileData, Turma_id: v})}><SelectTrigger className="h-8"><SelectValue placeholder="Selecione a Turma..." /></SelectTrigger><SelectContent>{turmas.map(t => (<SelectItem key={t.Turma_id} value={t.Turma_id.toString()}>{t.Ano}º {t.Turma}</SelectItem>))}</SelectContent></Select></div>
-                            ) : (
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1"><Label className="text-xs font-medium text-muted-foreground">Ano</Label><div className="text-sm">{selectedStudent.Turma_Ano ? `${selectedStudent.Turma_Ano}º` : "-"}</div></div>
-                                    <div className="space-y-1"><Label className="text-xs font-medium text-muted-foreground">Turma</Label><div className="text-sm">{selectedStudent.Turma_Letra || "-"}</div></div>
-                                </div>
-                            )}
-                        </div>
+                    <div className="space-y-3"><h4 className="font-semibold border-b pb-2 text-sm text-muted-foreground uppercase flex items-center gap-2"><School size={14}/> Dados Escolares</h4>
+                        <div>{isEditingProfile && editProfileData ? (<div className="space-y-1"><Label className="text-xs font-medium text-muted-foreground">Turma</Label><Select value={editProfileData.Turma_id || ""} onValueChange={(v) => setEditProfileData({...editProfileData, Turma_id: v})}><SelectTrigger className="h-8"><SelectValue placeholder="Selecione a Turma..." /></SelectTrigger><SelectContent>{turmas.map(t => (<SelectItem key={t.Turma_id} value={t.Turma_id.toString()}>{t.Ano}º {t.Turma}</SelectItem>))}</SelectContent></Select></div>) : (<div className="grid grid-cols-2 gap-4"><div className="space-y-1"><Label className="text-xs font-medium text-muted-foreground">Ano</Label><div className="text-sm">{selectedStudent.Turma_Ano ? `${selectedStudent.Turma_Ano}º` : "-"}</div></div><div className="space-y-1"><Label className="text-xs font-medium text-muted-foreground">Turma</Label><div className="text-sm">{selectedStudent.Turma_Letra || "-"}</div></div></div>)}</div>
                     </div>
-                    
-                    <div className="space-y-3">
-                        <h4 className="font-semibold border-b pb-2 text-sm text-muted-foreground uppercase tracking-wide">Família & Contactos (EE)</h4>
+                    <div className="space-y-3"><h4 className="font-semibold border-b pb-2 text-sm text-muted-foreground uppercase tracking-wide">Família & Contactos (EE)</h4>
                         <div className="grid gap-3">
                             <div><Label className="text-xs font-medium text-muted-foreground">Nome Encarregado Educação</Label>{isEditingProfile && editProfileData ? (<Input value={editProfileData.EE_Nome} onChange={e => setEditProfileData({...editProfileData, EE_Nome: e.target.value})} className="h-8"/>) : (<p className="text-sm font-medium">{selectedStudent.EE_Nome}</p>)}</div>
                             <div className="grid grid-cols-2 gap-3">
@@ -587,111 +427,34 @@ const Students = () => {
                             <div><Label className="text-xs font-medium text-muted-foreground">Morada</Label>{isEditingProfile && editProfileData ? (<Input value={editProfileData.EE_Morada || ""} onChange={e => setEditProfileData({...editProfileData, EE_Morada: e.target.value})} className="h-8"/>) : (<p className="text-sm flex items-center gap-2"><MapPin size={12}/> {selectedStudent.EE_Morada || "N/A"}</p>)}</div>
                         </div>
                     </div>
-
-                    <div className="flex justify-between items-center pt-6 mt-2 border-t">
-                        {isEditingProfile ? (
-                            <>
-                                <Button variant="ghost" onClick={() => setIsEditingProfile(false)}><X size={16} className="mr-2" /> Cancelar</Button>
-                                <Button onClick={handleSaveProfile} className="bg-green-600 hover:bg-green-700"><Save size={16} className="mr-2" /> Guardar</Button>
-                            </>
-                        ) : (
-                            <>
-                                <Button variant="destructive" size="sm" onClick={() => setDeleteAlertOpen(true)}><Trash2 size={16} className="mr-2" /> Eliminar</Button>
-                                <div className="flex gap-2"><Button variant="outline" onClick={() => setIsProfileOpen(false)}>Fechar</Button><Button onClick={handleStartEditingProfile}><Pencil size={16} className="mr-2" /> Editar</Button></div>
-                            </>
-                        )}
-                    </div>
+                    <div className="flex justify-between items-center pt-6 mt-2 border-t">{isEditingProfile ? (<><Button variant="ghost" onClick={() => setIsEditingProfile(false)}><X size={16} className="mr-2" /> Cancelar</Button><Button onClick={handleSaveProfile} className="bg-green-600 hover:bg-green-700"><Save size={16} className="mr-2" /> Guardar</Button></>) : (<><Button variant="destructive" size="sm" onClick={() => setDeleteAlertOpen(true)}><Trash2 size={16} className="mr-2" /> Eliminar</Button><div className="flex gap-2"><Button variant="outline" onClick={() => setIsProfileOpen(false)}>Fechar</Button><Button onClick={handleStartEditingProfile}><Pencil size={16} className="mr-2" /> Editar</Button></div></>)}</div>
                 </TabsContent>
-
                 <TabsContent value="notas" className="space-y-4">
-                    <div className="flex justify-between items-center bg-muted/30 p-2 rounded-md border">
-                        <div className="flex items-center gap-2">
-                            <Label className="text-xs">Ano:</Label>
-                            <Select value={anoLetivoNotaFiltro} onValueChange={setAnoLetivoNotaFiltro}>
-                                <SelectTrigger className="h-8 w-[120px]"><SelectValue /></SelectTrigger>
-                                <SelectContent><SelectItem value="Todos">Todos</SelectItem>{anosDisponiveisNotas.map(ano => <SelectItem key={ano} value={ano}>{ano}</SelectItem>)}</SelectContent>
-                            </Select>
-                        </div>
-                        <Button size="sm" onClick={handleOpenAddNota} className="gap-2"><Plus size={14} /> Nota</Button>
-                    </div>
-
-                    <div className="border rounded-md max-h-[400px] overflow-y-auto">
-                        {loadingNotas ? (
-                            <div className="flex justify-center py-10"><Loader2 className="animate-spin" /></div>
-                        ) : notas.length === 0 ? (
-                            <div className="text-center py-10 text-muted-foreground">Sem registos de notas.</div>
-                        ) : (
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Disciplina</TableHead>
-                                        <TableHead className="w-[80px]">Ano</TableHead>
-                                        <TableHead className="text-center w-[40px]">1P</TableHead>
-                                        <TableHead className="text-center w-[40px]">2P</TableHead>
-                                        <TableHead className="text-center w-[40px]">3P</TableHead>
-                                        <TableHead className="text-center font-bold w-[40px]">Final</TableHead>
-                                        <TableHead className="w-[40px]"></TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {notasFiltradas.map((nota) => (
-                                        <TableRow key={nota.Nota_id}>
-                                            <TableCell className="font-medium flex items-center gap-2"><BookOpen size={14} className="text-muted-foreground"/>{nota.Disciplina_Nome}</TableCell>
-                                            <TableCell className="text-xs text-muted-foreground">{nota.Ano_letivo}</TableCell>
-                                            <TableCell className="text-center">{nota.Nota_1P ?? "-"}</TableCell>
-                                            <TableCell className="text-center">{nota.Nota_2P ?? "-"}</TableCell>
-                                            <TableCell className="text-center">{nota.Nota_3P ?? "-"}</TableCell>
-                                            <TableCell className="text-center font-bold bg-muted/50">{nota.Nota_Final ?? "-"}</TableCell>
-                                            <TableCell>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenEditNota(nota)}><Pencil size={14} className="text-muted-foreground" /></Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        )}
+                    <div className="flex justify-between items-center bg-muted/30 p-2 rounded-md border"><div className="flex items-center gap-2"><Label className="text-xs">Ano:</Label><Select value={anoLetivoNotaFiltro} onValueChange={setAnoLetivoNotaFiltro}><SelectTrigger className="h-8 w-[120px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Todos">Todos</SelectItem>{anosDisponiveisNotas.map(ano => <SelectItem key={ano} value={ano}>{ano}</SelectItem>)}</SelectContent></Select></div><Button size="sm" onClick={handleOpenAddNota} className="gap-2"><Plus size={14} /> Nota</Button></div>
+                    <div className="border rounded-md max-h-[400px] overflow-y-auto">{loadingNotas ? (<div className="flex justify-center py-10"><Loader2 className="animate-spin" /></div>) : notas.length === 0 ? (<div className="text-center py-10 text-muted-foreground">Sem registos de notas.</div>) : (
+                            <Table><TableHeader><TableRow><TableHead>Disciplina</TableHead><TableHead className="w-[80px]">Ano</TableHead><TableHead className="text-center w-[40px]">1P</TableHead><TableHead className="text-center w-[40px]">2P</TableHead><TableHead className="text-center w-[40px]">3P</TableHead><TableHead className="text-center font-bold w-[40px]">Final</TableHead><TableHead className="w-[40px]"></TableHead></TableRow></TableHeader>
+                                <TableBody>{notasFiltradas.map((nota) => (<TableRow key={nota.Nota_id}><TableCell className="font-medium flex items-center gap-2"><BookOpen size={14} className="text-muted-foreground"/>{nota.Disciplina_Nome}</TableCell><TableCell className="text-xs text-muted-foreground">{nota.Ano_letivo}</TableCell><TableCell className="text-center">{nota.Nota_1P ?? "-"}</TableCell><TableCell className="text-center">{nota.Nota_2P ?? "-"}</TableCell><TableCell className="text-center">{nota.Nota_3P ?? "-"}</TableCell><TableCell className="text-center font-bold bg-muted/50">{nota.Nota_Final ?? "-"}</TableCell><TableCell><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenEditNota(nota)}><Pencil size={14} className="text-muted-foreground" /></Button></TableCell></TableRow>))}</TableBody>
+                            </Table>)}
                     </div>
                 </TabsContent>
               </Tabs>
-            </div>
-          )}
+            </div>)}
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG NOTA */}
       <Dialog open={isNotaDialogOpen} onOpenChange={setIsNotaDialogOpen}>
-        <DialogContent className="max-w-sm">
-            <DialogHeader><DialogTitle>{isEditingNota ? "Editar Nota" : "Nova Nota"}</DialogTitle></DialogHeader>
+        <DialogContent className="max-w-sm"><DialogHeader><DialogTitle>{isEditingNota ? "Editar Nota" : "Nova Nota"}</DialogTitle></DialogHeader>
             <div className="grid gap-3 py-2">
-                <div className="space-y-1">
-                    <Label>Disciplina</Label>
-                    <Select value={notaForm.Disc_id} onValueChange={val => setNotaForm({...notaForm, Disc_id: val})} disabled={isEditingNota}>
-                        <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
-                        <SelectContent>{disciplinas.map((disc) => (<SelectItem key={disc.Disc_id} value={disc.Disc_id.toString()}>{disc.Nome}</SelectItem>))}</SelectContent>
-                    </Select>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                    <div className="space-y-1"><Label>1ºP</Label><Input type="number" value={notaForm.Nota_1P} onChange={e => setNotaForm({...notaForm, Nota_1P: e.target.value})}/></div>
-                    <div className="space-y-1"><Label>2ºP</Label><Input type="number" value={notaForm.Nota_2P} onChange={e => setNotaForm({...notaForm, Nota_2P: e.target.value})}/></div>
-                    <div className="space-y-1"><Label>3ºP</Label><Input type="number" value={notaForm.Nota_3P} onChange={e => setNotaForm({...notaForm, Nota_3P: e.target.value})}/></div>
-                </div>
+                <div className="space-y-1"><Label>Disciplina</Label><Select value={notaForm.Disc_id} onValueChange={val => setNotaForm({...notaForm, Disc_id: val})} disabled={isEditingNota}><SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger><SelectContent>{disciplinas.map((disc) => (<SelectItem key={disc.Disc_id} value={disc.Disc_id.toString()}>{disc.Nome}</SelectItem>))}</SelectContent></Select></div>
+                <div className="grid grid-cols-3 gap-2"><div className="space-y-1"><Label>1ºP</Label><Input type="number" value={notaForm.Nota_1P} onChange={e => setNotaForm({...notaForm, Nota_1P: e.target.value})}/></div><div className="space-y-1"><Label>2ºP</Label><Input type="number" value={notaForm.Nota_2P} onChange={e => setNotaForm({...notaForm, Nota_2P: e.target.value})}/></div><div className="space-y-1"><Label>3ºP</Label><Input type="number" value={notaForm.Nota_3P} onChange={e => setNotaForm({...notaForm, Nota_3P: e.target.value})}/></div></div>
                 <div className="space-y-1"><Label>Final</Label><Input type="number" className="font-bold" value={notaForm.Nota_Final} onChange={e => setNotaForm({...notaForm, Nota_Final: e.target.value})}/></div>
                 <div className="space-y-1"><Label>Ano Letivo</Label><Input value={notaForm.Ano_letivo} onChange={e => setNotaForm({...notaForm, Ano_letivo: e.target.value})}/></div>
             </div>
-            <div className="flex justify-between items-center mt-2">
-                {isEditingNota ? (<Button variant="destructive" size="sm" onClick={handleDeleteGrade}>Apagar</Button>) : (<div></div>)}
-                <div className="flex gap-2"><Button variant="outline" onClick={() => setIsNotaDialogOpen(false)}>Cancelar</Button><Button onClick={handleSaveNota}>Salvar</Button></div>
-            </div>
+            <div className="flex justify-between items-center mt-2">{isEditingNota ? (<Button variant="destructive" size="sm" onClick={handleDeleteGrade}>Apagar</Button>) : (<div></div>)}<div className="flex gap-2"><Button variant="outline" onClick={() => setIsNotaDialogOpen(false)}>Cancelar</Button><Button onClick={handleSaveNota}>Salvar</Button></div></div>
         </DialogContent>
       </Dialog>
 
-      {/* ALERT DELETE STUDENT */}
-      <AlertDialog open={deleteAlertOpen} onOpenChange={setDeleteAlertOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Tem a certeza absoluta?</AlertDialogTitle><AlertDialogDescription>Esta ação não pode ser desfeita. O aluno será eliminado permanentemente.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDeleteStudent} className="bg-destructive hover:bg-destructive/90">Sim, eliminar</AlertDialogAction></AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <AlertDialog open={deleteAlertOpen} onOpenChange={setDeleteAlertOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Tem a certeza absoluta?</AlertDialogTitle><AlertDialogDescription>Esta ação não pode ser desfeita. O aluno será eliminado permanentemente.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDeleteStudent} className="bg-destructive hover:bg-destructive/90">Sim, eliminar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
   );
 };

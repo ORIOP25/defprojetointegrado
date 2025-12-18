@@ -10,15 +10,12 @@ import io
 
 router = APIRouter()
 
-# --- 0. OBTER ANOS LETIVOS (NOVO) ---
+# --- 0. OBTER ANOS LETIVOS ---
 @router.get("/anos-letivos")
 def get_anos_letivos(db: Session = Depends(get_db)):
-    """Retorna lista de anos letivos disponíveis no sistema (ex: 2023/2024)."""
-    # Procura anos distintos na tabela de Turmas
     anos = db.query(models.Turma.AnoLetivo).distinct().all()
-    # Converte lista de tuplas [('2023/2024',), ...] para lista simples
     lista = [a[0] for a in anos if a[0]]
-    lista.sort(reverse=True) # Mais recentes primeiro
+    lista.sort(reverse=True)
     return lista
 
 # --- 1. LISTAR ALUNOS (Com Histórico) ---
@@ -28,79 +25,47 @@ def read_students(
     limit: int = 100, 
     search: Optional[str] = None, 
     turma_id: Optional[int] = None, 
-    ano_letivo: Optional[str] = None, # NOVO FILTRO
+    ano_letivo: Optional[str] = None,
     sort_by: Optional[str] = "id",
     db: Session = Depends(get_db)
 ):
-    # Base Query
     query = db.query(models.Aluno).options(
         joinedload(models.Aluno.turma), 
         joinedload(models.Aluno.encarregado_educacao),
-        joinedload(models.Aluno.matriculas).joinedload(models.Matricula.turma) # Carregar histórico
+        joinedload(models.Aluno.matriculas).joinedload(models.Matricula.turma)
     )
 
-    # Filtro: Ano Letivo (Logica de Histórico)
     if ano_letivo:
-        # Junta com Matrículas e Turmas para filtrar pelo Ano Letivo escolhido
         query = query.join(models.Matricula).join(models.Turma).filter(models.Turma.AnoLetivo == ano_letivo)
     
-    # Filtro: Pesquisa Nome
     if search:
-        search_fmt = f"%{search}%"
-        query = query.filter(models.Aluno.Nome.ilike(search_fmt))
+        query = query.filter(models.Aluno.Nome.ilike(f"%{search}%"))
     
-    # Filtro: Turma Específica (ID)
     if turma_id:
-        # Se filtramos por ID de turma, usamos a matricula para garantir consistência
         query = query.filter(models.Aluno.matriculas.any(models.Matricula.Turma_id == turma_id))
 
-    # Ordenação
     if sort_by == "name":
         query = query.order_by(models.Aluno.Nome)
     else:
         query = query.order_by(models.Aluno.Aluno_id)
 
-    # Paginação
     alunos_query = query.offset(skip).limit(limit).all()
 
     results = []
     for aluno in alunos_query:
-        # Lógica para decidir qual turma mostrar
         turma_obj = None
-        
         if ano_letivo:
-            # Se selecionamos um ano, procuramos a matrícula desse ano específico
-            # para mostrar "7ºA" (do passado) e não "8ºA" (atual)
-            matricula_desse_ano = next(
-                (m for m in aluno.matriculas if m.turma and m.turma.AnoLetivo == ano_letivo), 
-                None
-            )
+            matricula_desse_ano = next((m for m in aluno.matriculas if m.turma and m.turma.AnoLetivo == ano_letivo), None)
             if matricula_desse_ano:
                 turma_obj = matricula_desse_ano.turma
         else:
-            # Se não há filtro de ano, mostra a turma atual
             turma_obj = aluno.turma
 
-        # Preparar dados para o schema
-        turma_str = "Sem Turma"
-        t_ano = 0
-        t_letra = ""
-        
+        turma_str, t_ano, t_letra = "Sem Turma", 0, ""
         if turma_obj:
-            turma_str = f"{turma_obj.Ano}º {turma_obj.Turma}"
-            t_ano = turma_obj.Ano
-            t_letra = turma_obj.Turma
+            turma_str, t_ano, t_letra = f"{turma_obj.Ano}º {turma_obj.Turma}", turma_obj.Ano, turma_obj.Turma
 
-        # Dados do EE
-        ee_nome, ee_tel, ee_email, ee_morada, ee_relacao = "N/A", None, None, None, None
-        if aluno.encarregado_educacao:
-            ee = aluno.encarregado_educacao
-            ee_nome = ee.Nome
-            ee_tel = ee.Telefone
-            ee_email = ee.Email
-            ee_morada = ee.Morada
-            ee_relacao = ee.Relacao
-
+        ee = aluno.encarregado_educacao
         results.append({
             "Aluno_id": aluno.Aluno_id,
             "Nome": aluno.Nome,
@@ -110,13 +75,12 @@ def read_students(
             "Turma_Desc": turma_str,
             "Turma_Ano": t_ano,
             "Turma_Letra": t_letra,
-            "EE_Nome": ee_nome,
-            "EE_Telefone": ee_tel,
-            "EE_Email": ee_email,
-            "EE_Morada": ee_morada,
-            "EE_Relacao": ee_relacao
+            "EE_Nome": ee.Nome if ee else "N/A",
+            "EE_Telefone": ee.Telefone if ee else None,
+            "EE_Email": ee.Email if ee else None,
+            "EE_Morada": ee.Morada if ee else None,
+            "EE_Relacao": ee.Relacao if ee else None
         })
-    
     return results
 
 # --- 2. LISTAR DISCIPLINAS E TURMAS ---
@@ -125,73 +89,84 @@ def get_all_disciplines(db: Session = Depends(get_db)):
     return db.query(models.Disciplina).all()
 
 @router.get("/turmas/list", response_model=List[schemas.TurmaSimple])
-def get_all_turmas(db: Session = Depends(get_db)):
-    return db.query(models.Turma).order_by(models.Turma.Ano, models.Turma.Turma).all()
+def get_all_turmas(ano_letivo: Optional[str] = None, db: Session = Depends(get_db)):
+    query = db.query(models.Turma)
+    if ano_letivo:
+        query = query.filter(models.Turma.AnoLetivo == ano_letivo)
+    return query.order_by(models.Turma.Ano, models.Turma.Turma).all()
 
 # --- 3. CRUD ALUNOS (CRIAR / EDITAR) ---
 
 @router.post("/", response_model=schemas.AlunoListagem)
 def create_student_full(aluno_in: schemas.AlunoCreateFull, db: Session = Depends(get_db)):
-    # 1. Criar o Encarregado de Educação primeiro
-    novo_ee = models.EncarregadoEducacao(
-        Nome=aluno_in.EE_Nome,
-        Telefone=aluno_in.EE_Telefone,
-        Email=aluno_in.EE_Email,
-        Morada=aluno_in.EE_Morada,
-        Relacao=aluno_in.EE_Relacao
-    )
-    db.add(novo_ee)
-    db.commit()      # Commit para garantir que o ID é gerado
-    db.refresh(novo_ee)
-
-    # 2. Procurar a Turma selecionada
-    turma = db.query(models.Turma).filter(
-        models.Turma.Ano == aluno_in.Ano,
-        models.Turma.Turma == aluno_in.Turma_Letra
-    ).order_by(models.Turma.Turma_id.desc()).first()
-    
-    turma_id = turma.Turma_id if turma else None
-
-    # 3. Criar o Aluno
-    # AQUI ESTAVA O ERRO: Tem de ser 'Enc_Educacao_id' e não 'EE_id'
-    novo_aluno = models.Aluno(
-        Nome=aluno_in.Nome,
-        Data_Nasc=aluno_in.Data_Nasc,
-        Genero=aluno_in.Genero,
-        Telefone=aluno_in.Telefone,
-        Turma_id=turma_id,
-        Enc_Educacao_id=novo_ee.EE_id, 
-        Ano=aluno_in.Ano
-    )
-    db.add(novo_aluno)
-    db.commit()
-    db.refresh(novo_aluno)
-
-    # 4. CRIAR A MATRÍCULA (Fundamental para o histórico funcionar)
-    if turma_id:
-        nova_matricula = models.Matricula(
-            Aluno_id=novo_aluno.Aluno_id,
-            Turma_id=turma_id
+    try:
+        # 1. Criar o EE (Encarregado de Educação) -
+        novo_ee = models.EncarregadoEducacao(
+            Nome=aluno_in.EE_Nome,
+            Telefone=aluno_in.EE_Telefone,
+            Email=aluno_in.EE_Email,
+            Morada=aluno_in.EE_Morada,
+            Relacao=aluno_in.EE_Relacao
         )
-        db.add(nova_matricula)
-        db.commit()
+        db.add(novo_ee)
+        db.flush() # Obtém o ID sem fechar a transação
 
-    # Preparar resposta
-    return {
-        "Aluno_id": novo_aluno.Aluno_id,
-        "Nome": novo_aluno.Nome,
-        "Data_Nasc": novo_aluno.Data_Nasc,
-        "Genero": novo_aluno.Genero,
-        "Turma_Desc": f"{turma.Ano}º {turma.Turma}" if turma else "Sem Turma",
-        "Turma_Ano": turma.Ano if turma else 0,
-        "Turma_Letra": turma.Turma if turma else "",
-        "EE_Nome": novo_ee.Nome,
-        "EE_Telefone": novo_ee.Telefone,
-        "Telefone": novo_aluno.Telefone,
-        "EE_Email": novo_ee.Email,
-        "EE_Morada": novo_ee.Morada,
-        "EE_Relacao": novo_ee.Relacao
-    }
+        # 2. Procurar a Turma (Agora filtrando por Ano Letivo para ser preciso)
+        # Assumimos que o schema AlunoCreateFull agora recebe o Ano_Letivo
+        query_turma = db.query(models.Turma).filter(
+            models.Turma.Ano == aluno_in.Ano,
+            models.Turma.Turma == aluno_in.Turma_Letra
+        )
+        
+        # Se o ano letivo for enviado, filtramos por ele 
+        if hasattr(aluno_in, 'Ano_Letivo') and aluno_in.Ano_Letivo:
+            query_turma = query_turma.filter(models.Turma.AnoLetivo == aluno_in.Ano_Letivo)
+        
+        turma = query_turma.order_by(models.Turma.Turma_id.desc()).first()
+        turma_id = turma.Turma_id if turma else None
+
+        # 3. Criar o Aluno
+        novo_aluno = models.Aluno(
+            Nome=aluno_in.Nome,
+            Data_Nasc=aluno_in.Data_Nasc,
+            Genero=aluno_in.Genero,
+            Telefone=aluno_in.Telefone,
+            Turma_id=turma_id,
+            Enc_Educacao_id=novo_ee.EE_id, 
+            Ano=aluno_in.Ano
+        )
+        db.add(novo_aluno)
+        db.flush()
+
+        # 4. CRIAR A MATRÍCULA
+        if turma_id:
+            nova_matricula = models.Matricula(
+                Aluno_id=novo_aluno.Aluno_id,
+                Turma_id=turma_id
+            )
+            db.add(nova_matricula)
+
+        db.commit() # Grava tudo de uma vez
+        db.refresh(novo_aluno)
+
+        return {
+            "Aluno_id": novo_aluno.Aluno_id,
+            "Nome": novo_aluno.Nome,
+            "Data_Nasc": novo_aluno.Data_Nasc,
+            "Genero": novo_aluno.Genero,
+            "Turma_Desc": f"{turma.Ano}º {turma.Turma}" if turma else "Sem Turma",
+            "Turma_Ano": turma.Ano if turma else 0,
+            "Turma_Letra": turma.Turma if turma else "",
+            "EE_Nome": novo_ee.Nome,
+            "EE_Telefone": novo_ee.Telefone,
+            "Telefone": novo_aluno.Telefone,
+            "EE_Email": novo_ee.Email,
+            "EE_Morada": novo_ee.Morada,
+            "EE_Relacao": novo_ee.Relacao
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.put("/{aluno_id}", response_model=schemas.AlunoListagem)
 def update_student(aluno_id: int, dados: schemas.AlunoUpdate, db: Session = Depends(get_db)):

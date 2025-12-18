@@ -12,7 +12,9 @@ import {
   Menu,
   X,
   UserCircle,
-  School, // <--- ADICIONADO: Ícone de Escola
+  School,
+  BarChart2,
+  Settings,
   MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -59,10 +61,16 @@ const Layout = () => {
       show: true, 
     },
     {
-      title: "Turmas", // <--- ADICIONADO: Menu de Turmas
+      title: "Turmas",
       href: "/classes",
       icon: School,
       show: true, 
+    },
+    { 
+      title: "Consultas",
+      href: "/consultas",
+      icon: BarChart2,
+      show: true,
     },
     {
       title: "Staff",
@@ -87,6 +95,12 @@ const Layout = () => {
       href: "/chat",
       icon: MessageSquare,
       show: isGlobalAdmin, 
+    },
+    {
+    title: "Configurações",
+    href: "/configuracoes",
+    icon: Settings,
+    show: isGlobalAdmin, 
     },
   ];
 

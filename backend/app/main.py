@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.endpoints import auth, finances, dashboard, students, staff, turmas, disciplinas, ai_advisor, ai_chat
+from app.api.endpoints import auth, finances, dashboard, students, staff, turmas, disciplinas, consultas, ai_advisor, ai_chat, config_escolar
 from app.db.database import engine, Base
 
 # Criar tabelas se não existirem
@@ -38,8 +38,10 @@ app.include_router(staff.router, prefix="/staff", tags=["Gestão de Staff"])
 app.include_router(students.router, prefix="/students", tags=["Gestão de Alunos"])
 app.include_router(turmas.router, prefix="/turmas", tags=["Turmas"])
 app.include_router(disciplinas.router, prefix="/disciplinas", tags=["Disciplinas"])
+app.include_router(consultas.router, prefix="/consultas", tags=["Consultas e Estatísticas"])
 app.include_router(ai_advisor.router, prefix="/ai", tags=["Assistente IA (Relatórios)"])
 app.include_router(ai_chat.router, prefix="/chat", tags=["Assistente IA (Chat)"])
+app.include_router(config_escolar.router, prefix="/config-escolar", tags=["Configuração Escolar"])
 
 @app.get("/")
 def read_root():

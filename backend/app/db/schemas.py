@@ -207,6 +207,76 @@ class TurmaProfessoresUpdate(BaseModel):
 class RegrasTransicao(BaseModel):
     pass
 
+
+# --- Schemas para a Página de Consultas ---
+
+class AlunoMedia(BaseModel):
+    aluno_id: int
+    nome: str
+    turma: str
+    media: float
+
+class ProfessorMedia(BaseModel):
+    professor_id: int
+    nome: str
+    disciplina: str
+    media_alunos: float
+
+class AlunoReprovacao(BaseModel):
+    aluno_id: int
+    nome: str
+    turma: str
+    ano: int
+    negativas: int
+    motivo: str
+
+class ConsultasGeraisResponse(BaseModel):
+    top_alunos_turma: List[AlunoMedia]
+    alunos_reprovacao: List[AlunoReprovacao]
+    top_professores: List[ProfessorMedia]
+    bottom_professores: List[ProfessorMedia]
+
+# --- ESTRUTURA ESCOLAR (NOVOS SCHEMAS PARA CONFIGURACAO) ---
+
+class DepartamentoBase(BaseModel):
+    Nome: str
+
+class DepartamentoCreate(DepartamentoBase):
+    pass
+
+class DepartamentoDisplay(DepartamentoBase):
+    Depart_id: int
+    class Config:
+        from_attributes = True
+
+class EscalaoBase(BaseModel):
+    Nome: str
+    Valor_Base: float
+    Descricao: Optional[str] = None
+
+class EscalaoCreate(EscalaoBase):
+    pass
+
+class EscalaoUpdate(EscalaoBase):
+    pass
+
+class EscalaoDisplay(EscalaoBase):
+    Escalao_id: int
+    class Config:
+        from_attributes = True
+
+class DisciplinaBase(BaseModel):
+    Nome: str
+    Categoria: Optional[str] = None
+
+class DisciplinaCreate(DisciplinaBase):
+    pass
+
+class DisciplinaDisplay(DisciplinaBase):
+    Disc_id: int
+    class Config:
+        from_attributes = True
+
 # --- Schemas de Finanças (Dashboard) ---
 
 class BalancoInvestimento(BaseModel):
@@ -225,6 +295,36 @@ class BalancoGeral(BaseModel):
     total_despesa: float
     saldo: float
     detalhe_investimentos: List[BalancoInvestimento] = []
+
+# --- SCHEMAS DE FINANÇAS (EXTENSÃO) ---
+
+class FinanciamentoCreate(BaseModel):
+    Tipo: str
+    Valor: float
+    Ano: int
+    Observacoes: Optional[str] = None
+
+class FinanciamentoDisplay(BaseModel):
+    Fin_id: int
+    Tipo: str
+    Valor: float
+    Ano: int
+    class Config:
+        from_attributes = True
+
+class DespesaCreate(BaseModel):
+    descricao: str
+    valor: float
+    investimento_id: int
+
+class DespesaHistorico(BaseModel):
+    id: int
+    descricao: str
+    valor: float
+    investimento_id: int
+    investimento_nome: str
+    class Config:
+        from_attributes = True
 
 # --- Schemas de IA / Recomendações ---
 class RecomendacaoIA(BaseModel):
@@ -257,3 +357,4 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
+
