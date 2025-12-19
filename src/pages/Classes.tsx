@@ -198,7 +198,7 @@ const ClassesPage = () => {
         
         {/* GLOBAL TRANSITION BTN */}
         <Dialog open={isGlobalTransitionOpen} onOpenChange={setIsGlobalTransitionOpen}>
-            <DialogTrigger asChild><Button className="bg-primary hover:bg-primary/90 text-white gap-2 shadow-sm"><Sparkles size={18} /> Novo Ano Letivo</Button></DialogTrigger>
+            <DialogTrigger asChild><Button className="bg-primary hover:bg-primary/90 text-white gap-2 shadow-sm"><Plus size={18} /> Novo Ano Letivo</Button></DialogTrigger>
             <DialogContent className="max-w-md">
                 <DialogHeader><DialogTitle>Abertura Automática</DialogTitle><DialogDescription>O sistema analisará todas as notas e criará turmas para o próximo ano.</DialogDescription></DialogHeader>
                 <div className="py-4 space-y-3 text-sm">
